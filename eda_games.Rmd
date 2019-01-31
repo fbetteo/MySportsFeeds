@@ -1,0 +1,134 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r include=FALSE}
+rm(list=ls())
+library(tidyverse)
+```
+
+Cargamos la data de todos los partidos de 2017-2018 y hacemos primeros análisis exploratorio.
+La descarga proviene de raw_generate_seasonal_2017_2018_regular.R
+
+```{r}
+seasonal_games <- readRDS(file = here::here("data","raw","seasonal_games_2017_2018.RDS"))
+```
+
+
+```{r message=TRUE}
+attributes(seasonal_games$api_json)
+# attributes(seasonal_games$api_json$games) # datos partido
+attributes(seasonal_games$api_json$references$venueReferences) # meta de equipos y estadio
+```
+
+EDA de games
+
+```{r}
+games_raw <- seasonal_games$api_json$games
+games_raw$score.quarters[[1]]
+# glimpse(games_raw)
+games <- games_raw %>% select(game_id = schedule.id , game_start_time = schedule.startTime, 
+                              away_team = schedule.awayTeam.abbreviation,
+                              home_team = schedule.homeTeam.abbreviation,
+                              away_score = score.awayScoreTotal,
+                              home_score = score.homeScoreTotal,
+                              quarters_score = score.quarters) 
+# glimpse(games)
+games %>% select(-quarters_score) %>% summary()
+
+```
+
+1230 partidos. 82 fechas * 30 equipos. (dividido 2)
+
+
+Home vs Away
+```{r}
+means <- games %>% summarise(away = mean(away_score),home = mean(home_score)) %>% as.matrix() %>% as.vector() %>%
+  round(2)
+
+games_stack <- games %>% select(-quarters_score) %>% 
+  gather(key = team, value = score, 5:6 )
+
+games_stack %>% 
+  # arrange(game_id) %>%
+  ggplot(aes(x = team, y = score, color = team)) + 
+  geom_boxplot() +
+  coord_flip() +
+  stat_summary(fun.y = mean, geom = "point", color = "red", shape = 5) + 
+  scale_color_brewer(palette = "Dark2") + 
+  theme_classic() + 
+  scale_x_discrete(limits = c("home_score", "away_score")) + 
+  stat_summary(fun.y = function(x) mean(x) + 5 , geom = "text", label = means, color = "black")
+```
+
+Puntos hechos por partido
+
+```{r}
+t1 <- games_stack %>% filter(team == "away_score") %>%
+  select(-c(home_team,team)) %>%
+  rename(team = away_team)
+  
+t2 <- games_stack %>% filter(team == "home_score") %>%
+  select(-c(away_team,team)) %>%
+  rename(team = home_team)
+  
+t3 <- rbind(t1,t2)  
+
+# Barchart estandar
+
+t3 %>% group_by(team) %>% 
+  summarise(total = sum(score), promedio = mean(score), desvio = sd(score)) %>%
+  arrange(promedio) %>%
+  ggplot(aes(x = reorder(team, -promedio), y = promedio)) + 
+  geom_col(width = 0.7, fill = c(rep(1,10), rep(2,10), rep(3,10))) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0.6))  
+  # coord_flip()
+```
+
+```{r}
+# Diverging bars
+t3 %>% group_by(team) %>% 
+  summarise(total = sum(score), promedio = mean(score), desvio = sd(score)) %>%
+  mutate(type = ifelse(promedio > mean(t3$score),"above","below"), mean_cent = promedio - mean(t3$score)) %>%
+  #arrange(promedio) %>%
+  ggplot(aes(x = reorder(team, mean_cent), y = mean_cent)) + 
+  geom_bar(stat = "identity", aes(fill = type), width = 0.6) + 
+  scale_fill_manual(name="Puntos", 
+                    labels = c("Above Average", "Below Average"), 
+                    values = c("above"="#00ba38", "below"="#f8766d")) + 
+  labs(subtitle="GSW a la cabeza. SAC menos goleador de la temporada", 
+       title= "Puntos por partido respecto al promedio") + 
+  coord_flip()
+```
+
+Agregando Playoffs
+
+```{r}
+playoff_games <- readRDS(here::here("data","raw","playoff_games_2017_2018.rds"))
+
+playoff_teams <- playoff_games$api_json$references[[1]]$abbreviation %>%
+  as.data.frame() %>% rename(team = '.') %>% mutate(playoffs = 7)
+
+```
+
+```{r}
+t4 <- t3 %>% left_join(.,playoff_teams, by = "team")
+
+t4 %>% group_by(team) %>% 
+  summarise(total = sum(score), promedio = mean(score), desvio = sd(score), playoffs = mean(playoffs)) %>%
+  mutate(type = ifelse(promedio > mean(t4$score),"above","below"), mean_cent = promedio - mean(t4$score)) %>%
+  #arrange(promedio) %>%
+  ggplot(aes(x = reorder(team, mean_cent), y = mean_cent)) + 
+  geom_bar(stat = "identity", aes(fill = type), width = 0.6) + 
+  geom_point(aes(x = team, y = playoffs), size = 3) + 
+  scale_fill_manual(name="Puntos", 
+                    labels = c("Above Average", "Below Average"), 
+                    values = c("above"="#00ba38", "below"="#f8766d")) + 
+  labs(subtitle="Círculo negra indica clasificación a playoffs", 
+       title= "Puntos por partido respecto al promedio") + 
+  coord_flip()
+
+```
+
+En principio (temporada 2017-2018) parece que hacer mas puntos que la media no es garantía de Playoffs
