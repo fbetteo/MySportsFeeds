@@ -108,7 +108,8 @@ Agregando Playoffs
 playoff_games <- readRDS(here::here("data","raw","playoff_games_2017_2018.rds"))
 
 playoff_teams <- playoff_games$api_json$references[[1]]$abbreviation %>%
-  as.data.frame() %>% rename(team = '.') %>% mutate(playoffs = 7)
+  as.data.frame() %>% rename(team = '.') %>% mutate(playoffs = 7) # 7 para que ya sirva como posicion en el plot. Hardcodeado
+
 
 ```
 
@@ -132,3 +133,50 @@ t4 %>% group_by(team) %>%
 ```
 
 En principio (temporada 2017-2018) parece que hacer mas puntos que la media no es garantía de Playoffs
+
+-------
+
+Analizamos FG2 % y FG3 % vs Win %.
+
+La consulta de team stats tiene bastante data a nivel temporada por equipo.
+
+```{r message=FALSE}
+team_stats <- readRDS(here::here("data","raw", "team_stats_2017_2018.rds"))
+
+```
+```{r message=FALSE}
+team_stats_df <- team_stats$api_json$teamStatsTotals
+# glimpse(team_stats_df)
+```
+
+Hay relación lineal entre Fg2 % y partidos ganados pero alrededor del 50% hay cierta variabilidad, como dos grupos con bastante diferencia de Win%.
+
+Tendrá que ver los puntos permitidos o cantidad de posesiones?
+
+<> Emprolijar
+```{r}
+fg2ptpct <- team_stats_df %>% select(team.abbreviation, stats.fieldGoals.fg2PtAttPerGame, stats.fieldGoals.fg2PtPct, stats.standings.winPct) %>%
+  arrange(-stats.fieldGoals.fg2PtPct)
+
+fg2ptpct %>% ggplot(aes(x = stats.fieldGoals.fg2PtPct, y = stats.standings.winPct, label = team.abbreviation)) + 
+  geom_point() +
+  geom_text()
+
+```
+
+Hay relación creciente entre FG3 % y Win % pero no tan lineal. Esta el Outlier de SAC con buen porcentaje y poco Win % pero tiene pocos tiros comparados con el resto.
+Quitar?
+Correr regresión con weight por Attempts?
+
+<> Emprolijar
+
+```{r}
+
+fg3ptpct <- team_stats_df %>% select(team.abbreviation, stats.fieldGoals.fg3PtAttPerGame, stats.fieldGoals.fg3PtPct, stats.standings.winPct) %>%
+  arrange(-stats.fieldGoals.fg3PtPct)
+
+fg3ptpct %>% ggplot(aes(x = stats.fieldGoals.fg3PtPct, y = stats.standings.winPct, label = team.abbreviation)) + 
+  geom_point(aes(size = stats.fieldGoals.fg3PtAttPerGame)) + 
+  geom_smooth()
+```
+
