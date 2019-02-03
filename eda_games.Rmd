@@ -134,6 +134,7 @@ t4 %>% group_by(team) %>%
 
 En principio (temporada 2017-2018) parece que hacer mas puntos que la media no es garantía de Playoffs
 
+***
 -------
 
 Analizamos FG2 % y FG3 % vs Win %.
@@ -179,4 +180,25 @@ fg3ptpct %>% ggplot(aes(x = stats.fieldGoals.fg3PtPct, y = stats.standings.winPc
   geom_point(aes(size = stats.fieldGoals.fg3PtAttPerGame)) + 
   geom_smooth()
 ```
+
+***
+
+Correlaciones.
+
+```{r}
+temp <- team_stats$api_json$teamStatsTotals %>% 
+   select(team.abbreviation, stats.fieldGoals.fg2PtAttPerGame, stats.fieldGoals.fg2PtPct,stats.fieldGoals.fg3PtAttPerGame,    stats.fieldGoals.fg3PtPct,
+   stats.freeThrows.ftAttPerGame, stats.freeThrows.ftPct, stats.rebounds.offRebPerGame, stats.rebounds.defRebPerGame,         stats.offense.astPerGame,
+   stats.offense.ptsPerGame, stats.defense.stlPerGame, stats.defense.blkPerGame, stats.defense.ptsAgainstPerGame,             stats.miscellaneous.foulsPerGame,
+   stats.miscellaneous.foulsDrawnPerGame, stats.miscellaneous.plusMinusPerGame, stats.standings.winPct )
+
+
+cor1 <- cor(temp[,-1])
+
+rownames(cor1) <- stringr::word(rownames(cor1),-1, sep = "\\.")
+colnames(cor1) <- stringr::word(colnames(cor1),-1, sep = "\\.")
+corrplot::corrplot(cor1, method = "circle", type = "upper", tl.cex = 1, order = "hclust")
+
+```
+
 
