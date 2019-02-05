@@ -188,6 +188,7 @@ Correlaciones.
 ```{r}
 temp <- team_stats$api_json$teamStatsTotals %>% 
    select(team.abbreviation, stats.fieldGoals.fg2PtAttPerGame, stats.fieldGoals.fg2PtPct,stats.fieldGoals.fg3PtAttPerGame,    stats.fieldGoals.fg3PtPct,
+          stats.fieldGoals.fgPct,
    stats.freeThrows.ftAttPerGame, stats.freeThrows.ftPct, stats.rebounds.offRebPerGame, stats.rebounds.defRebPerGame,         stats.offense.astPerGame,
    stats.offense.ptsPerGame, stats.defense.stlPerGame, stats.defense.blkPerGame, stats.defense.ptsAgainstPerGame,             stats.miscellaneous.foulsPerGame,
    stats.miscellaneous.foulsDrawnPerGame, stats.miscellaneous.plusMinusPerGame, stats.standings.winPct )
@@ -201,4 +202,36 @@ corrplot::corrplot(cor1, method = "circle", type = "upper", tl.cex = 1, order = 
 
 ```
 
+* Fg2Att correlaciona negativo con Fg3Att (logico, misma cantidad de tiros, distinta composicion)
+* offReb correlaciona negativo con FTpct. Agarran más rebotes ofensivos los que erran los libres? OffReb no se da casi durante el juego dinámico? No sería un parámetro que aporta a ganar partidos .
+* Fg2Pct correlaciona muy bien con WinPct.
+* ptsPerGame correlaciona positivo con Win. Un poco contradictorio con el gráfico anterior de quienes entraro a playoffs.
+* DefReb correlaciona positivo (aunque no fuerte) con ptsPerGame y WinPct (en chart vemos que hay una tendencia)
+* Blks correlaciona positivo (aunque no fuerte) con ptsPerGame y WinPct. En chart vemos que está afectado por outliers. En WinPct es más lineal.
+
+```{r}
+temp %>% ggplot(aes(x = stats.defense.blkPerGame, y = stats.offense.ptsPerGame, label = team.abbreviation)) + 
+  geom_point() + 
+  geom_smooth() + 
+  geom_text()
+
+temp %>% ggplot(aes(x = stats.defense.blkPerGame, y = stats.standings.winPct, label = team.abbreviation)) + 
+  geom_point() + 
+  geom_smooth() + 
+  geom_text()
+
+temp %>% ggplot(aes(x = stats.rebounds.defRebPerGame, y = stats.offense.ptsPerGame, label = team.abbreviation)) + 
+  geom_point() + 
+  geom_smooth() + 
+  geom_text()
+
+temp %>% ggplot(aes(x = stats.rebounds.defRebPerGame, y = stats.standings.winPct, label = team.abbreviation)) + 
+  geom_point() + 
+  geom_smooth() + 
+  geom_text()
+
+
+
+
+```
 

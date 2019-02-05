@@ -1,0 +1,148 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Read files
+
+```{r}
+library(tidyverse)
+toread <-  list.files(here::here("data","raw","daily_team_gamelogs")) %>% # archivos en carpeta
+  as.list()
+
+team_gamelogs <-  toread %>% map( ~ readRDS(here::here("data","raw","daily_team_gamelogs",.)))  # los lee todos en una lista de listas
+
+my_element <- function(x) x[[2]]$gamelogs # funcionar para extraer la sublista necesaria
+
+team_stats_df <- team_gamelogs %>% map( ~ pluck(., my_element)) %>%  # pluck accede a elementos de lista y le pasas la f.
+  bind_rows() # junto todo
+
+
+
+```
+
+Seleccionamos variables de interés
+
+```{r}
+team_gamelogs_df <- team_stats_df %>%
+  select(game.id, game.startTime, team.abbreviation, stats.fieldGoals.fg2PtAtt, stats.fieldGoals.fg2PtPct,    stats.fieldGoals.fg2PtMade, stats.fieldGoals.fg3PtMade, stats.freeThrows.ftMade, 
+          stats.fieldGoals.fg3PtAtt, stats.fieldGoals.fg3PtPct, stats.freeThrows.ftAtt, stats.freeThrows.ftPct,
+         stats.rebounds.defReb, stats.rebounds.offReb, stats.defense.blk, stats.defense.stl,
+         stats.offense.ast, 
+         stats.defense.blkAgainst, stats.defense.tov,
+         stats.miscellaneous.fouls, stats.miscellaneous.foulsDrawn,
+         stats.offense.pts,
+         stats.defense.ptsAgainst,
+         stats.miscellaneous.plusMinus,
+         stats.standings.wins,
+         game.awayTeamAbbreviation,
+         game.homeTeamAbbreviation
+         ) %>%
+  mutate(home = ifelse(game.homeTeamAbbreviation == team.abbreviation, 1, 0),
+         opponent = ifelse(home == 1, game.awayTeamAbbreviation, game.homeTeamAbbreviation)) %>%
+  select(-c(game.homeTeamAbbreviation, game.awayTeamAbbreviation))
+
+```
+
+Hacemos Cumulative Mean + Lag
+
+```{r}
+
+team_gamelogs_df_cumu <- team_gamelogs_df %>%
+  group_by(team.abbreviation) %>%
+  arrange(game.id) %>%
+  mutate(stats.offense.posessions = stats.fieldGoals.fg2PtAtt +  stats.fieldGoals.fg3PtAtt + stats.defense.tov + stats.miscellaneous.fouls) %>%
+  mutate_at( vars(starts_with("stats")),funs(cumu= cummean(.))) %>%
+  mutate_at(vars(ends_with("cumu")), funs(l1 = lag(.,1))) %>%
+  select(-c(stats.standings.wins_cumu, stats.standings.wins_cumu_l1)) %>%
+  ungroup()
+
+glimpse(team_gamelogs_df_cumu)
+
+team_gamelogs_df_cumu %>% filter(team.abbreviation == "BOS")
+```
+
+***
+
+EDA
+
+Posesiones
+```{r}
+
+# Diverging bars
+team_gamelogs_df_cumu %>% group_by(team.abbreviation) %>% 
+  summarise(total = sum(stats.offense.posessions), promedio = mean(stats.offense.posessions), desvio = sd(stats.offense.posessions)) %>%
+  mutate(type = ifelse(promedio > mean(team_gamelogs_df_cumu$stats.offense.posessions),"above","below"), mean_cent = promedio - mean(team_gamelogs_df_cumu$stats.offense.posessions)) %>%
+  #arrange(promedio) %>%
+  ggplot(aes(x = reorder(team.abbreviation, mean_cent), y = mean_cent)) + 
+  geom_bar(stat = "identity", aes(fill = type), width = 0.6) + 
+  scale_fill_manual(name="Puntos", 
+                    labels = c("Above Average", "Below Average"), 
+                    values = c("above"="#00ba38", "below"="#f8766d")) + 
+  #labs(subtitle="GSW a la cabeza. SAC menos goleador de la temporada", 
+   #    title= "Puntos por partido respecto al promedio") + 
+  coord_flip()
+
+
+```
+
+Modelito nested 
+
+```{r}
+
+# saco la primera observacion de cada grupo porque por el lag no tiene sentido
+team_gamelogs_df_cumu2 <- team_gamelogs_df_cumu %>%
+  group_by(team.abbreviation) %>%
+  arrange(game.id) %>%
+  slice(-1) %>%
+  ungroup()
+
+# nest por equipo
+model_df <- team_gamelogs_df_cumu2 %>%
+  group_by(team.abbreviation) %>%
+  nest()
+
+# variables  a modelar (promedioacumulado lagueado)
+vars <- names(team_gamelogs_df_cumu)[endsWith(names(team_gamelogs_df_cumu), "l1")]
+
+# funcion del modelo
+l1_model <- function(df, vars){
+  lm(as.formula( paste("stats.offense.pts ~ ", paste(vars, collapse = "+"))), data = df)
+}
+
+# map a cada observación nested
+model_df <- model_df %>%
+  mutate(model= map(.x = model_df$data, ~ l1_model(df = .x, vars = vars)))
+
+# broom para obtener resultados de modelos de manera estandar
+model_df <- model_df %>%
+  mutate(glnc = map(model, broom::glance)) %>%
+  mutate(aug = map(model, broom::augment))
+
+
+# unnesteo 
+t1 <- model_df %>%
+  unnest(aug) 
+
+# extraigo valores predichos
+pred <- t1 %>% select(.fitted, .resid ) %>%
+  mutate(orig = .resid + .fitted)
+
+# junto data original con predichos
+t3 <- cbind.data.frame(team_gamelogs_df_cumu2, pred)
+
+# junto la tabla consigo misma para juntar ambos equipos de un mismo partido
+t4 <- t3 %>% select(game.id, team.abbreviation, stats.offense.pts, stats.standings.wins, .fitted) 
+t5 <- t4 %>% inner_join(t4, by = "game.id", suffix = c("first","second")) %>%
+  filter(team.abbreviationfirst != team.abbreviationsecond)
+
+# ifelse para comparar predicho con realidad
+t6 <- t5 %>% mutate( winpred = ifelse(.fittedfirst >= .fittedsecond, 1,0)) %>%
+  mutate(acertado = ifelse(winpred == stats.standings.winsfirst, 1,0))
+
+# tabla de acertados filtrando por diferencias mayores a dos puntos
+t6 %>% filter(abs(.fittedfirst - .fittedsecond) > 2) %>%
+  select(acertado) %>% table()
+```
+Acierta casi 75% de los partidos...
+O son todos obvios o hay algo mal con la data. Parece muy precisa la predicción a veces...
