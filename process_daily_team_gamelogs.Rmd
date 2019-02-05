@@ -59,7 +59,7 @@ team_gamelogs_df_cumu <- team_gamelogs_df %>%
 
 glimpse(team_gamelogs_df_cumu)
 
-team_gamelogs_df_cumu %>% filter(team.abbreviation == "BOS")
+team_gamelogs_df_cumu %>% filter(team.abbreviation == "LAL")
 ```
 
 ***
@@ -86,7 +86,7 @@ team_gamelogs_df_cumu %>% group_by(team.abbreviation) %>%
 
 ```
 
-Modelito nested 
+Modelito nested lm(points ~ cummean_l1) Promedios acumulados lagueados
 
 ```{r}
 
@@ -141,8 +141,21 @@ t6 <- t5 %>% mutate( winpred = ifelse(.fittedfirst >= .fittedsecond, 1,0)) %>%
   mutate(acertado = ifelse(winpred == stats.standings.winsfirst, 1,0))
 
 # tabla de acertados filtrando por diferencias mayores a dos puntos
+# + chart para ver si hay algo temporal (parece bastante constante)
 t6 %>% filter(abs(.fittedfirst - .fittedsecond) > 2) %>%
-  select(acertado) %>% table()
+  select(acertado) %>% 
+  mutate(number = 1:n()) %>%
+  mutate(bins = c(rep(1,n()/10),rep(2,n()/10),rep(3,n()/10),rep(4,n()/10),rep(5,n()/10),rep(6,n()/10),rep(7,n()/10),rep(8,n()/10),rep(9,n()/10),rep(10,n()/10 + 6) )) %>%
+  group_by(bins) %>%
+  summarise(value = sum(acertado)) %>%
+  ggplot(aes(x= bins, y = value)) + 
+  geom_bar(stat = "identity")
+
+
+
 ```
 Acierta casi 75% de los partidos...
 O son todos obvios o hay algo mal con la data. Parece muy precisa la predicción a veces...
+
+
+
