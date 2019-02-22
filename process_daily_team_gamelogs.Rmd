@@ -157,5 +157,93 @@ t6 %>% filter(abs(.fittedfirst - .fittedsecond) > 2) %>%
 Acierta casi 75% de los partidos...
 O son todos obvios o hay algo mal con la data. Parece muy precisa la predicción a veces...
 
+---
 
+Comparamos coeficientes entre equipos.
+Recordar que estoy haciendo un modelo por equipo y puede ser overfitting.
+
+```{r}
+team_coeffs_df <- model_df$model %>% map(., broom::tidy) %>% # tidy genera tabla con coeficientes y estadisticos
+  map2(., model_df$team.abbreviation, cbind) %>% # Agrego team correspondiente
+  map(., function(x) rename(x,  "team" = ".y[[i]]")) %>% # Formato
+  map(., function(x) mutate(x, team = as.character(team))) %>%
+  bind_rows() # junto todo
+
+```
+
+Promedio por variable
+
+```{r}
+team_coeffs_df %>% group_by(term) %>%
+  ggplot(aes( x = term, y = mean(estimate))) + 
+  geom_bar(stat = "identity")
+
+
+team_coeffs_df %>% select(term, estimate, p.value) %>%
+  group_by(term) %>%
+  summarise(promedio = mean(p.value)) %>%
+  arrange(promedio)
+
+```
+
+
+Modelo con CV
+NO FUNCAAA
+
+```{r}
+# nest por equipo
+model_df <- team_gamelogs_df_cumu2 %>%
+  group_by(team.abbreviation) %>%
+  nest()
+
+# variables  a modelar (promedioacumulado lagueado)
+vars <- names(team_gamelogs_df_cumu)[endsWith(names(team_gamelogs_df_cumu), "l1")]
+
+# funcion del modelo
+l1_model_cv <- function(df, vars){
+  DAAG::cv.lm(form.lm = as.formula( paste("stats.offense.pts ~ ", paste(vars, collapse = "+"))), data = df, m = 3)
+}
+
+
+# map a cada observación nested
+model_df_cv <- model_df %>%
+  mutate(model= map(.x = model_df$data, ~ l1_model_cv(df = .x, vars = vars)))
+
+# broom para obtener resultados de modelos de manera estandar
+model_df <- model_df %>%
+  mutate(glnc = map(model, broom::glance)) %>%
+  mutate(aug = map(model, broom::augment))
+
+
+# unnesteo 
+t1 <- model_df %>%
+  unnest(aug) 
+
+# extraigo valores predichos
+pred <- t1 %>% select(.fitted, .resid ) %>%
+  mutate(orig = .resid + .fitted)
+
+# junto data original con predichos
+t3 <- cbind.data.frame(team_gamelogs_df_cumu2, pred)
+
+# junto la tabla consigo misma para juntar ambos equipos de un mismo partido
+t4 <- t3 %>% select(game.id, team.abbreviation, stats.offense.pts, stats.standings.wins, .fitted) 
+t5 <- t4 %>% inner_join(t4, by = "game.id", suffix = c("first","second")) %>%
+  filter(team.abbreviationfirst != team.abbreviationsecond)
+
+# ifelse para comparar predicho con realidad
+t6 <- t5 %>% mutate( winpred = ifelse(.fittedfirst >= .fittedsecond, 1,0)) %>%
+  mutate(acertado = ifelse(winpred == stats.standings.winsfirst, 1,0))
+
+# tabla de acertados filtrando por diferencias mayores a dos puntos
+# + chart para ver si hay algo temporal (parece bastante constante)
+t6 %>% filter(abs(.fittedfirst - .fittedsecond) > 2) %>%
+  select(acertado) %>% 
+  mutate(number = 1:n()) %>%
+  mutate(bins = c(rep(1,n()/10),rep(2,n()/10),rep(3,n()/10),rep(4,n()/10),rep(5,n()/10),rep(6,n()/10),rep(7,n()/10),rep(8,n()/10),rep(9,n()/10),rep(10,n()/10 + 6) )) %>%
+  group_by(bins) %>%
+  summarise(value = sum(acertado)) %>%
+  ggplot(aes(x= bins, y = value)) + 
+  geom_bar(stat = "identity")
+```
 
