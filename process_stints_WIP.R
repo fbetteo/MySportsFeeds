@@ -1,9 +1,15 @@
 # Prueba play by play
 
+
+# Nota. Cada Stint tiene variables temporales que denotan cuando inician.
+# El ultimo "inicia" al terminar el partido pero termina ahi mismo.
+
 library(tidyverse)
+# Leer data
 raw <- readRDS(here::here("data","raw","play_by_play","play_by_play20171017-BOS-CLE.RDS"))
 raw_plays <- raw$api_json$plays
 
+# filtrar por sustituciones
 subs <- raw_plays %>% select(description, playStatus.quarter, playStatus.secondsElapsed, starts_with("substitution")) %>%
   filter(substitution.team.id != "NA")
 
@@ -11,25 +17,32 @@ head(raw_plays)
 
 glimpse(subs)
 
+# Clean
 aa <- subs %>% select(playStatus.quarter, playStatus.secondsElapsed, substitution.team.id, substitution.incomingPlayer.id, substitution.outgoingPlayer.id)
 
 head(aa)
 
+# Nestear por cada cambio. Una tabla con todos los jugadores presentes.
 a2 <- aa %>% 
   group_by(playStatus.quarter, playStatus.secondsElapsed) %>%
   nest()
 
+# Creas "stints". Cada periodo de tiempo con jugadores distintos en cancha.
 a2 <- a2 %>% mutate(stint = row_number())
 a2
 
+# Cantidad de stints en el partido
 n_stints <- a2 %>% summarise( count = max(stint))
 n_stints
+
+# equipo inicial
 lineup <- readRDS(here::here("data","raw","lineup","lineup20171017-BOS-CLE.RDS"))
 
 raw_lineup <- lineup$api_json$teamLineups
 raw_lineup[4]
 str(raw_lineup)
 
+# Equipo inicial con status correspondiente -1 away, 1 home.
 bosline <- raw_lineup$actual.lineupPositions[[1]] %>%
   mutate(status = -1)
 bosline
@@ -37,55 +50,72 @@ cleline <- raw_lineup$actual.lineupPositions[[2]] %>%
   mutate(status = 1)
 cleline
 
-
-ex1 <- a2[2,]
-str(ex1)
-ex1$data[[1]]
-
-bosupd <- bosline %>% left_join(ex1$data[[1]], by = c("player.id" = "substitution.outgoingPlayer.id")) %>%
-  mutate(status = -1)
-
-bosupd
+# Genero lista vacia que va a tener cada equipo en cancha durante los stints.
 match_lineup <- vector("list", length = (n_stints[[1]]+1))
 
-a2[1,]$data[[1]]
-
+# Jugadores que estuvieron listados para el partido.
 match_players <- bosline %>% rbind(cleline) %>%
   select(player.id) %>% filter(player.id != "NA")
 
 match_players
 
+# Primer stint que va del inicio hasta la primera sustitucion
 match_lineup[[1]] <- bosline %>% rbind(cleline) %>%
   filter(str_detect(position, "Starter")) %>%
   select(position, player.id, status) %>%
   mutate(substitution.team.id = NA) %>%
   right_join(match_players, by = "player.id")
 
-for (i in 2:n_stints[[1]]){
+# Resto de los stints
+for (i in 2:(n_stints[[1]]+1)){
   print(i)
-  match_lineup[[i]] <- match_lineup[[i-1]] %>% select(-substitution.team.id) %>% filter(status != "NA")
+  # Me quedo con los que ya estaban en cancha
+  match_lineup[[i]] <- match_lineup[[i-1]] %>% select(-substitution.team.id) %>% filter(status != "NA" & status != 0)
+  # Mergeo con sustitucion
   match_lineup[[i]] <- match_lineup[[i]] %>% left_join(a2[(i-1),]$data[[1]], by = c("player.id" = "substitution.outgoingPlayer.id"))
-  match_lineup[[i]] <- match_lineup[[i]] %>% mutate(player.id = ifelse(is.na(substitution.incomingPlayer.id), player.id, substitution.incomingPlayer.id)) %>%
-    select(-substitution.incomingPlayer.id) %>%
+  
+  # IF porque en los entretiempos figura como que sale todo el equipo y entran otros 5. Controlo por esa situacion
+  if (sum(is.na(match_lineup[[i]]$substitution.incomingPlayer.id)) == 10) {
+    # Si es el final del partido, salen todos y no entra nadie.
+    if (sum(a2[(i-1),]$data[[1]][,"substitution.incomingPlayer.id"], na.rm = TRUE) == 0) {
+      print("End of Match")
+      
+      } else {
+    # Esto es para los entretiempos normales. Remplaza los 10 en cancha por los 10 que entren.  
+    match_lineup[[i]] <- data.frame( position = rep(x = "Starter", 10),
+                                     player.id = a2[(i-1),]$data[[1]][which(!is.na(a2[(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.incomingPlayer.id"][[1]],
+                                     substitution.team.id = a2[(i-1),]$data[[1]][which(!is.na(a2[(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.team.id"][[1]]) %>%
+      mutate(status = ifelse(substitution.team.id == 82, -1, 1)) # hardcodeado para partido de prueba
+      browser() 
+        }
+      } else {
+    # Si no es entre tiempo remplaza el que sale por el que entra normalmente.
+    match_lineup[[i]] <- match_lineup[[i]] %>% mutate(player.id = ifelse(is.na(substitution.incomingPlayer.id), player.id, substitution.incomingPlayer.id)) %>%
+    select(-substitution.incomingPlayer.id)
+      }
+  # Joinea los 10 en cancha con el resto que quedó en el banco para tener todos los jugadores en una tabla
+  # Los que quedan afuera tienen status = 0
+  match_lineup[[i]] <- match_lineup[[i]] %>%
     right_join(match_players, by = "player.id") %>%
     mutate(status = ifelse(is.na(status),0,status))
+  
  
 }
 
-
+# Genera data para el primer stint que es desde el arranque del partido
 inital_stint <- data.frame(playStatus.quarter = 1, playStatus.secondsElapsed = 0, stint = 0) 
+
+# Junta el primer stint con el Nest del inicio y pone los lineups como una variable (lista)
 a3 <- rbind(inital_stint,select(a2, playStatus.quarter, playStatus.secondsElapsed,stint)) %>%
   mutate(data = match_lineup)
 
-str(a3, list.len = 4)
+# Genera dataset con una row por stint con el lineup traspuesto, cada jugador como columna.
+# Es el formato requerido para despues modelar.
+df_tidy <- rbind(inital_stint,select(a2, playStatus.quarter, playStatus.secondsElapsed,stint)) %>%
+  mutate(data = match_lineup %>% map(.f = function(x) select(x,player.id, status))) %>%
+  mutate(data = data %>% map(.f = ~spread(., key = player.id,value = status )))
 
-head(a3$data[1])
 
-str(match_lineup[[2]])
+# No funciono bien creo. Era otra alternativa para tener la data en formato correcto.
+# stints_tabla <- a3$data %>% map( .f = ~ spread(., key = player.id,value = status ))
 
-match_lineup[[1]]
-match_lineup[[2]]
-match_lineup[[3]]
-match_lineup[[4]]
-match_lineup[[5]]
-match_lineup[[1]] == match_lineup[[2]]
