@@ -64,7 +64,8 @@ match_lineup[[1]] <- bosline %>% rbind(cleline) %>%
   filter(str_detect(position, "Starter")) %>%
   select(position, player.id, status) %>%
   mutate(substitution.team.id = NA) %>%
-  right_join(match_players, by = "player.id")
+  right_join(match_players, by = "player.id") %>%
+  mutate(status = ifelse(is.na(status),0,status ))
 
 # Resto de los stints
 for (i in 2:(n_stints[[1]]+1)){
@@ -86,7 +87,7 @@ for (i in 2:(n_stints[[1]]+1)){
                                      player.id = a2[(i-1),]$data[[1]][which(!is.na(a2[(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.incomingPlayer.id"][[1]],
                                      substitution.team.id = a2[(i-1),]$data[[1]][which(!is.na(a2[(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.team.id"][[1]]) %>%
       mutate(status = ifelse(substitution.team.id == 82, -1, 1)) # hardcodeado para partido de prueba
-      browser() 
+       
         }
       } else {
     # Si no es entre tiempo remplaza el que sale por el que entra normalmente.
@@ -114,8 +115,36 @@ a3 <- rbind(inital_stint,select(a2, playStatus.quarter, playStatus.secondsElapse
 df_tidy <- rbind(inital_stint,select(a2, playStatus.quarter, playStatus.secondsElapsed,stint)) %>%
   mutate(data = match_lineup %>% map(.f = function(x) select(x,player.id, status))) %>%
   mutate(data = data %>% map(.f = ~spread(., key = player.id,value = status )))
+  
 
 
-# No funciono bien creo. Era otra alternativa para tener la data en formato correcto.
-# stints_tabla <- a3$data %>% map( .f = ~ spread(., key = player.id,value = status ))
+####
 
+# Proceso los puntos anotados durante el partido
+
+points <- raw_plays %>% select(description, playStatus.quarter, playStatus.secondsElapsed, starts_with("fieldGoal"), starts_with("freeThrow")) %>%
+  filter(fieldGoalAttempt.result == "SCORED" | freeThrowAttempt.result == "SCORED") %>% # jugadas o tiros libres anotados
+  mutate(freeThrowAttempt.points = ifelse(freeThrowAttempt.result == "SCORED",1,0)) %>% # le agrego el valor de los FT
+  mutate(abs_point = rowSums(.[,c("fieldGoalAttempt.points", "freeThrowAttempt.points")],na.rm = TRUE)) %>% # puntos anotados en la jugada
+  mutate(fieldGoalAttempt.team.abbreviation = ifelse(is.na(fieldGoalAttempt.team.abbreviation),0,fieldGoalAttempt.team.abbreviation)) %>% # Clean porque si no fallaba al haber NA
+  mutate( freeThrowAttempt.team.abbreviation = ifelse(is.na(freeThrowAttempt.team.abbreviation),0,freeThrowAttempt.team.abbreviation)) %>%  # Clean porque si no fallaba al haber NA
+  # Aca anoto transformo a negativos los puntos del visitante
+  mutate(multiplicador_puntos = ifelse(fieldGoalAttempt.team.abbreviation == "BOS" | freeThrowAttempt.team.abbreviation == "BOS", -1, ifelse(fieldGoalAttempt.team.abbreviation == "CLE" | freeThrowAttempt.team.abbreviation == "CLE", 1,0))) %>%
+  # Diferencial de puntos, queda visto desde el Local. positivo es puntos a favor del local, negativos a favor del visitante
+  # Va de la mano con la variable status de cada jugador. 1 para los locales, -1 para los visitantes
+  mutate(diferencial = abs_point * multiplicador_puntos)
+
+# Tabla temporal con los stints del partido y su inicio/fin para mergear con la de puntos y ubicarlos dentro de cada stint
+temp_stint <- select(df_tidy, stint, playStatus.quarter, playStatus.secondsElapsed) %>%
+  group_by(playStatus.quarter) %>%
+  mutate(end_stint = lead(playStatus.secondsElapsed, 1)) %>%
+  ungroup() %>%
+  mutate(end_stint = ifelse(is.na(end_stint), 721, end_stint ))
+
+# funcion custom definida en functions.R
+points_stint <- merge_stint(temp_stint, points)
+
+# variable dependiente
+# diferencial de puntos por stints
+dep_var <- points_stint %>% group_by(stint) %>%
+  summarise(depvar = sum(diferencial))

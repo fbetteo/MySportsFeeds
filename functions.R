@@ -72,3 +72,27 @@ API_request_lineup <- function(version = "2.0", league = "nba", season, feed, fo
   
   
 }
+
+
+## Funcion para mergear stints ya consolidados con puntos generados en cada uno
+## La idea es filtrar por cuarto y mergear las acciones cuyos momento en el tiempo condice con cada stint
+## El objetivo es decir a que stint pertenece cada jugada.
+## Se implemento para los puntos en primera instancia
+## Acordarse que df1 es el grupo de stints
+## df2 es la tabla con puntos
+
+merge_stint <- function(df1,df2){
+  quarters <- df1$playStatus.quarter %>% unique
+  print(quarters)
+  full <- data.frame()
+  for (i in 1:max(quarters)){
+    print(i)
+    tmp1 <- df1 %>% filter(playStatus.quarter == i)
+    tmp2 <- df2 %>% filter(playStatus.quarter == i)
+    df_joined <- fuzzyjoin::fuzzy_right_join(tmp1, tmp2, by = c("playStatus.secondsElapsed" = "playStatus.secondsElapsed", 
+                                                              "end_stint" = "playStatus.secondsElapsed" ),
+                                             match_fun = list(`<`,`>=`))
+    full <- rbind(full, df_joined)
+  }
+  return(full)
+}
