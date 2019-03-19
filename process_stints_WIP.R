@@ -5,6 +5,7 @@
 # El ultimo "inicia" al terminar el partido pero termina ahi mismo.
 
 library(tidyverse)
+source("functions.R")
 # Leer data
 raw <- readRDS(here::here("data","raw","play_by_play","play_by_play20171017-BOS-CLE.RDS"))
 raw_plays <- raw$api_json$plays
@@ -119,6 +120,8 @@ df_tidy <- rbind(inital_stint,select(a2, playStatus.quarter, playStatus.secondsE
 
 
 ####
+## POINTS ##
+####
 
 # Proceso los puntos anotados durante el partido
 
@@ -146,5 +149,41 @@ points_stint <- merge_stint(temp_stint, points)
 
 # variable dependiente
 # diferencial de puntos por stints
-dep_var <- points_stint %>% group_by(stint) %>%
-  summarise(depvar = sum(diferencial))
+point_diferential <- points_stint %>% group_by(stint) %>%
+  summarise(diferential = sum(diferencial))
+
+# pueden quedar stints sin puntos
+# al mergear con las posesiones corregimos eso y las creamos con 0 puntos de diferencial
+
+####
+## POSSESSIONS ##
+####
+
+possessions <- raw_plays %>% select(description, playStatus.quarter, playStatus.secondsElapsed, fieldGoalAttempt.result,
+                                    rebound.type, freeThrowAttempt.result, freeThrowAttempt.attemptNum, freeThrowAttempt.totalAttempts,
+                                    turnover.type) %>%
+  mutate(end_possession = ifelse(fieldGoalAttempt.result == "SCORED" | rebound.type == "DEFENSIVE" |  is.na(turnover.type) == FALSE | 
+                                   (freeThrowAttempt.result == "SCORED" & freeThrowAttempt.attemptNum == freeThrowAttempt.totalAttempts), 1, 0)) %>%
+  filter(end_possession == 1)
+
+
+possessions_stint <- merge_stint(temp_stint, possessions)
+
+possesions_by_stint <-  possessions_stint %>% group_by(stint) %>%
+  summarise(amount_possessions = sum(end_possession)) # Sumar una mas, o ver como hacer
+                                                      # para tener en cuenta la ultima posesion de cada cuarto que puede
+                                                      # "no" terminar por causas tipicas y por lo tanto no estar contando una posesion
+
+####
+## Joining Possessions and Points
+####
+
+dependent_var <- possesions_by_stint %>% left_join(point_diferential, by = "stint") %>%
+  mutate(diferential = ifelse(is.na(diferential), 0, diferential)) %>%
+  mutate(dif_per_100_possessions = diferential/amount_possessions*100)
+
+####
+## TABLE TO MODEL 
+####
+
+df_model <- dependent_var %>% left_join(df_tidy, by = "stint")
