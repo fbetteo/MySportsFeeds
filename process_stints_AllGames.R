@@ -34,6 +34,11 @@ df3 <- df2 %>%
 df4 <- df3 %>%
   map(., .f = mutate, stint = row_number())
 
+saveRDS(object = df4, file = here::here("data","working", "df4.rds"))
+
+# Aca podemos cargar df4 para evitar leer toda la data cada vez que corro
+# df4 <- readRDS(file = here::here("data","working", "df4.rds"))
+
 # Cantidad de stints por partido
 n_stints <- df4 %>% 
   map(., .f = summarise, count = max(stint))
@@ -64,8 +69,7 @@ away_teams <- lineups %>%
   map(., pluck, accesor_away) %>%
   map(., as.data.frame) %>%
   map(., .f = ~mutate(., status = -1)) %>%
-  map(., set_names, c("team.id","abbreviation","status")) %>%
-  map(., select, -abbreviation)
+  map(., set_names, c("team.id","status")) 
 
 # Juntos lineups con away
 
@@ -106,5 +110,56 @@ match_lineups3 <- match_lineups3 %>%
 match_lineups3 <- map2(.x = match_lineups3, .y = match_players, .f = right_join, by = "player.id") %>%
   map(., mutate, status = ifelse(is.na(status),0,status ))
  
-str(match_lineups3, list.len = 3)
+# Reconvierto en lista de listas
+# No hay mejor manera de hacer esto?
 
+match_lineups4 <- vector("list", length = length(df4))
+
+for (i in 1:length(match_lineups4)){
+  match_lineups4[[i]][[1]] <- match_lineups3[[i]]
+}
+
+str(match_lineups4, list.len = 3)
+
+# Falla en el 16
+
+# Resto de los stints
+for (j in 1:length(match_lineups3)){
+  print(j)
+  for (i in 2:(as.integer(n_stints[[j]])+1)){
+    
+    
+    # Me quedo con los que ya estaban en cancha
+    match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i-1]] %>% select(-substitution.team.id) %>% filter(status != "NA" & status != 0)
+    
+    # Mergeo con sustitucion
+    match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i]] %>% left_join(df4[[j]][(i-1),]$data[[1]], by = c("player.id" = "substitution.outgoingPlayer.id"))
+   
+      
+    # IF porque en los entretiempos figura como que sale todo el equipo y entran otros 5. Controlo por esa situacion
+    if (sum(is.na(match_lineups4[[j]][[i]]$substitution.incomingPlayer.id)) == 10) {
+      # Si es el final del partido, salen todos y no entra nadie.
+      if (sum(df4[[j]][(i-1),]$data[[1]][,"substitution.incomingPlayer.id"], na.rm = TRUE) == 0) {
+        print("End of Match")
+       } 
+        else {
+        # Esto es para los entretiempos normales. Remplaza los 10 en cancha por los 10 que entren.  
+        match_lineups4[[j]][[i]] <- data.frame( position = rep(x = "Starter", 10),
+                                         player.id = df4[[j]][(i-1),]$data[[1]][which(!is.na(df4[[j]][(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.incomingPlayer.id"][[1]],
+                                         substitution.team.id = df4[[j]][(i-1),]$data[[1]][which(!is.na(df4[[j]][(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.team.id"][[1]]) %>%
+          mutate(status = ifelse(substitution.team.id == away_teams[[j]][[1]], -1, 1)) # hardcodeado para partido de prueba
+        
+       }
+      }
+          else {
+      # Si no es entre tiempo remplaza el que sale por el que entra normalmente.
+      match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i]] %>% mutate(player.id = ifelse(is.na(substitution.incomingPlayer.id), player.id, substitution.incomingPlayer.id)) %>%
+        select(-substitution.incomingPlayer.id)
+    }
+    # Joinea los 10 en cancha con el resto que quedó en el banco para tener todos los jugadores en una tabla
+    # Los que quedan afuera tienen status = 0
+    match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i]] %>%
+      right_join(match_players[[j]], by = "player.id") %>%
+      mutate(status = ifelse(is.na(status),0,status))
+  }
+}
