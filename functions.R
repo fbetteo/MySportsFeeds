@@ -96,3 +96,19 @@ merge_stint <- function(df1,df2){
   }
   return(full)
 }
+
+
+## Funcion para chequear que match_lineups4 tiene la *mayoria* de los partidos OK
+## Se fija que cada stint tenga 10 jugadores en cancha
+## No todos los partidos lo respetan pero por lo que vi suele cagarse con cambios raros al final
+## Data entry extraño al final del ultimo 4to y cosas asi
+
+check_stints_matchlineups4 <- function(x) {
+  map(x, function(x0) filter(x0, status != 0)) %>%
+    map(.,function(x1) filas = nrow(x1)) %>%
+    map(.,function(x2) x2 == 10) %>%
+    rlist::list.rbind() %>%
+    as.data.frame() %>%
+    set_names(., "chequeo") %>%
+    (function(x3) nrow(x3) == sum(x3$chequeo))
+}

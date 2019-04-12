@@ -155,7 +155,7 @@ str(match_lineups4, list.len = 3)
 for (j in 1:length(match_lineups3)){
   print(j)
   for (i in 2:(as.integer(n_stints[[j]])+1)){
-   if(j>34) print(i)
+   if(j>900) print(i)
     
     # Me quedo con los que ya estaban en cancha
     match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i-1]] %>% select(-substitution.team.id) %>% filter(status != "NA" & status != 0)
@@ -163,7 +163,10 @@ for (j in 1:length(match_lineups3)){
     # Mergeo con sustitucion
     match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i]] %>% left_join(df4[[j]][(i-1),]$data[[1]], by = c("player.id" = "substitution.outgoingPlayer.id"))
    
-      
+   # Nos fijamos si un stint no tiene ningun "incoming" y lo saltea
+   # Lo hacemos porque si no crashea a veces cuando pasan cosas extrañas al final del partido
+   if (length(match_lineups4[[j]][[i]]$substitution.incomingPlayer.id) == 0) next;  
+       
     # IF porque en los entretiempos figura como que sale todo el equipo y entran otros 5. Controlo por esa situacion
     if (sum(is.na(match_lineups4[[j]][[i]]$substitution.incomingPlayer.id)) == 10) {
       # Si es el final del partido, salen todos y no entra nadie.
@@ -173,8 +176,8 @@ for (j in 1:length(match_lineups3)){
         else {
         # Esto es para los entretiempos normales. Remplaza los 10 en cancha por los 10 que entren.  
         match_lineups4[[j]][[i]] <- data.frame( position = rep(x = "Starter", 10),
-                                         player.id = df4[[j]][(i-1),]$data[[1]][which(!is.na(df4[[j]][(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.incomingPlayer.id"][[1]],
-                                         substitution.team.id = df4[[j]][(i-1),]$data[[1]][which(!is.na(df4[[j]][(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.team.id"][[1]]) %>%
+                                         player.id = df4[[j]][(i-1),]$data[[1]][which(!is.na(df4[[j]][(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.incomingPlayer.id"][[1]][1:10],
+                                         substitution.team.id = df4[[j]][(i-1),]$data[[1]][which(!is.na(df4[[j]][(i-1),]$data[[1]]$substitution.incomingPlayer.id)),"substitution.team.id"][[1]][1:10]) %>%
           mutate(status = ifelse(substitution.team.id == away_teams[[j]][[1]], -1, 1)) # hardcodeado para partido de prueba
         
        }
@@ -191,3 +194,18 @@ for (j in 1:length(match_lineups3)){
       mutate(status = ifelse(is.na(status),0,status))
   }
 }
+
+
+## Chequeo que los stints de cada partido tengan 10 jugadores
+## no se cumple siempre pero mayoria es por cambios extraños al final del partido
+## o los ultimos stints. Gran mayoria TRUE. 1140 TRUE 89 FALSE
+
+check1 <- match_lineups4  %>%
+  map(., check_stints_matchlineups4)
+
+check1 %>%
+  rlist::list.rbind() %>%
+  as.data.frame() %>%
+  set_names(., "chequeo2") %>%
+  table()
+
