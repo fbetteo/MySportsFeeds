@@ -3,7 +3,7 @@
 
 # Nota. Cada Stint tiene variables temporales que denotan cuando inician.
 # El ultimo "inicia" al terminar el partido pero termina ahi mismo.
-
+rm(list = ls())
 library(tidyverse)
 
 # Me paro donde estan los rds
@@ -23,6 +23,12 @@ df2 <- df %>%
   filter(substitution.team.id != "NA")) %>%
   map(., .f = ~select(.,playStatus.quarter, playStatus.secondsElapsed, substitution.team.id, 
                       substitution.incomingPlayer.id, substitution.outgoingPlayer.id))
+
+# Falla en el 16
+# Detecte que en i = 20 (entretiempo) team 83 "incluye" 6 jugadores en vez de 5
+# uno de esos 6. el 13869 no forma parte del match lineup.
+# bug? lo remuevo. Levantar issue
+
 
 
 # Nestear por cada cambio. Una tabla con todos los jugadores presentes.
@@ -109,6 +115,29 @@ match_lineups3 <- match_lineups3 %>%
 # Mergeo con resto de jugadores. Tengo el primer stint hecho
 match_lineups3 <- map2(.x = match_lineups3, .y = match_players, .f = right_join, by = "player.id") %>%
   map(., mutate, status = ifelse(is.na(status),0,status ))
+
+
+
+# Falla el loop posterior en el 16
+# Detecte que en i = 20 (entretiempo) team 83 "incluye" 6 jugadores en vez de 5
+# uno de esos 6. el 13869 no forma parte del match lineup.
+# bug? lo remuevo. Levantar issue
+
+# Aplicar en order
+
+# falla 10139 en el 3qt de partido 18
+# falla 9169 en el 3qt de partido 19
+# falla el partido 35, no hay outogoing players y rompe, dropeo por ahora
+# drop 36 no se el error
+
+df4[[16]][19,]$data[[1]] <- df4[[16]][19,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 13869 | is.na(substitution.incomingPlayer.id))
+df4[[18]][20,]$data[[1]] <- df4[[18]][20,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 10139 | is.na(substitution.incomingPlayer.id))
+df4[[19]][13,]$data[[1]] <- df4[[19]][13,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 9169 | is.na(substitution.incomingPlayer.id))
+
+df4[35] <- NULL ; away_teams[[35]] <- NULL ; match_players[[35]] <- NULL; n_stints[[35]] <- NULL
+match_lineups3[[35]] <- NULL
+
+# Falla el 40 tambien. Encontrar una solucion mas integral...
  
 # Reconvierto en lista de listas
 # No hay mejor manera de hacer esto?
@@ -121,13 +150,12 @@ for (i in 1:length(match_lineups4)){
 
 str(match_lineups4, list.len = 3)
 
-# Falla en el 16
 
 # Resto de los stints
 for (j in 1:length(match_lineups3)){
   print(j)
   for (i in 2:(as.integer(n_stints[[j]])+1)){
-    
+   if(j>34) print(i)
     
     # Me quedo con los que ya estaban en cancha
     match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i-1]] %>% select(-substitution.team.id) %>% filter(status != "NA" & status != 0)
