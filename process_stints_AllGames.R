@@ -21,7 +21,6 @@ df2 <- df %>%
   map(., pluck, accesor) %>%
   map(., .f = ~select(., description, playStatus.quarter, playStatus.secondsElapsed, starts_with("substitution")) %>%
   filter(substitution.team.id != "NA")) %>%
-  #filter(str_detect(description, '\\(SUB\\)') == FALSE)) %>%
   map(., .f = ~select(.,playStatus.quarter, playStatus.secondsElapsed, substitution.team.id, 
                       substitution.incomingPlayer.id, substitution.outgoingPlayer.id))
 
