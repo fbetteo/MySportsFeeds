@@ -16,6 +16,10 @@ df <- list.files(pattern = ".rds") %>%
 # Funcion para acceder a lo util de cada lista
 accesor <- function(x) x$api_json$plays
 
+# raw_plays, se usa para obtener los puntos
+raw_plays <- df %>%
+  map(., pluck, accesor)
+
 # Me quedo con lo  util de cada lista
 df2 <- df %>%
   map(., pluck, accesor) %>%
@@ -195,12 +199,17 @@ for (j in 1:length(match_lineups3)){
   }
 }
 
+## Remuevo Duplicados, se encuentran duplicados en cancha..
+## Medio bruto remover por player.id pero no puedo revisar partido a partido
+
+remdup1 <- match_lineups4 %>% map(., map, function(x) x %>% distinct(player.id, .keep_all =TRUE) %>%
+                           select(position, player.id, status, substitution.team.id))
 
 ## Chequeo que los stints de cada partido tengan 10 jugadores
 ## no se cumple siempre pero mayoria es por cambios extraños al final del partido
 ## o los ultimos stints. Gran mayoria TRUE. 1140 TRUE 89 FALSE
 
-check1 <- match_lineups4  %>%
+check1 <- remdup1  %>%
   map(., check_stints_matchlineups4)
 
 check1 %>%
@@ -208,4 +217,105 @@ check1 %>%
   as.data.frame() %>%
   set_names(., "chequeo2") %>%
   table()
+
+check2 <- check1 %>%
+  rlist::list.rbind() %>%
+  as.data.frame() %>%
+  set_names(., "chequeo2")
+
+# Genera data para el primer stint que es desde el arranque del partido
+initial_stint <- vector("list", length = length(remdup1))
+for (i in 1:length(remdup1)){
+initial_stint[[i]] <- data.frame(playStatus.quarter = 1, playStatus.secondsElapsed = 0, stint = 0) 
+}
+
+
+# Junta el primer stint con el Nest del inicio y pone los lineups como una variable (lista)
+# df5 <- pmap(list(x = initial_stint,y = df4,z = remdup1), function(x, y, z) {rbind(x, select(y, playStatus.quarter, playStatus.secondsElapsed, stint)) %>%
+#  mutate(data = z)})
+
+
+# Genera dataset con una row por stint con el lineup traspuesto, cada jugador como columna.
+# Es el formato requerido para despues modelar.
+df_tidy <- pmap(list(x = initial_stint,y = df4,z = remdup1), function(x, y, z) {rbind(x, 
+                                                                                             select(y, playStatus.quarter, playStatus.secondsElapsed,stint)) %>%
+    mutate(data = z %>% map(.f = function(x) select(x,player.id, status))) %>%
+    mutate(data = data %>% map(.f = ~spread(., key = player.id, value = status)))
+    })
+
+
+
+####
+## POINTS ##
+####
+
+# Proceso los puntos anotados durante el partido
+# Dropeo el 35 para que sea coherente con df4 y etc que dropee.
+raw_plays[[35]] <- NULL
+
+points <- raw_plays %>% map(.,function(x) select(x,description, playStatus.quarter, playStatus.secondsElapsed, starts_with("fieldGoal"), starts_with("freeThrow")) %>%
+  filter(fieldGoalAttempt.result == "SCORED" | freeThrowAttempt.result == "SCORED") %>% # jugadas o tiros libres anotados
+  mutate(freeThrowAttempt.points = ifelse(freeThrowAttempt.result == "SCORED",1,0)) %>% # le agrego el valor de los FT
+  mutate(abs_point = rowSums(.[,c("fieldGoalAttempt.points", "freeThrowAttempt.points")],na.rm = TRUE)) %>% # puntos anotados en la jugada
+  mutate(fieldGoalAttempt.team.abbreviation = ifelse(is.na(fieldGoalAttempt.team.abbreviation),0,fieldGoalAttempt.team.abbreviation)) %>% # Clean porque si no fallaba al haber NA
+  mutate( freeThrowAttempt.team.abbreviation = ifelse(is.na(freeThrowAttempt.team.abbreviation),0,freeThrowAttempt.team.abbreviation)) %>%  # Clean porque si no fallaba al haber NA
+  # Aca anoto transformo a negativos los puntos del visitante
+  mutate(multiplicador_puntos = ifelse(fieldGoalAttempt.team.abbreviation == "BOS" | freeThrowAttempt.team.abbreviation == "BOS", -1, ifelse(fieldGoalAttempt.team.abbreviation == "CLE" | freeThrowAttempt.team.abbreviation == "CLE", 1,0))) %>%
+  # Diferencial de puntos, queda visto desde el Local. positivo es puntos a favor del local, negativos a favor del visitante
+  # Va de la mano con la variable status de cada jugador. 1 para los locales, -1 para los visitantes
+  mutate(diferencial = abs_point * multiplicador_puntos))
+
+
+# Tabla temporal con los stints del partido y su inicio/fin para mergear con la de puntos y ubicarlos dentro de cada stint
+temp_stint <- df_tidy %>% map(., function(x) select(x, stint, playStatus.quarter, playStatus.secondsElapsed) %>%
+  group_by(playStatus.quarter) %>%
+  mutate(end_stint = lead(playStatus.secondsElapsed, 1)) %>%
+  ungroup() %>%
+  mutate(end_stint = ifelse(is.na(end_stint), 721, end_stint )))
+
+# funcion custom definida en functions.R
+points_stint <- map2(.x = temp_stint, .y = points, merge_stint)
+
+# variable dependiente
+# diferencial de puntos por stints
+point_diferential <- points_stint %>% map(., function(x) x %>% group_by(stint) %>%
+  summarise(diferential = sum(diferencial)))
+
+# pueden quedar stints sin puntos
+# al mergear con las posesiones corregimos eso y las creamos con 0 puntos de diferencial
+
+####
+## POSSESSIONS ##
+####
+
+possessions <- raw_plays %>% map(., function(x) select(x, description, playStatus.quarter, playStatus.secondsElapsed, fieldGoalAttempt.result,
+                                    rebound.type, freeThrowAttempt.result, freeThrowAttempt.attemptNum, freeThrowAttempt.totalAttempts,
+                                    turnover.type) %>%
+  mutate(end_possession = ifelse(fieldGoalAttempt.result == "SCORED" | rebound.type == "DEFENSIVE" |  is.na(turnover.type) == FALSE | 
+                                   (freeThrowAttempt.result == "SCORED" & freeThrowAttempt.attemptNum == freeThrowAttempt.totalAttempts), 1, 0)) %>%
+  filter(end_possession == 1))
+
+
+possessions_stint <- map2(.x = temp_stint, .y = possessions, merge_stint)
+
+possesions_by_stint <-  possessions_stint %>% map(., function(x) x %>% group_by(stint) %>%
+  summarise(amount_possessions = sum(end_possession))) # Sumar una mas, o ver como hacer
+# para tener en cuenta la ultima posesion de cada cuarto que puede
+# "no" terminar por causas tipicas y por lo tanto no estar contando una posesion
+
+
+####
+## Joining Possessions and Points
+####
+
+dependent_var <- possesions_by_stint %>% map2(.x = ., .y = point_diferential, function(.x, .y) left_join(x = .x, y =.y, by = "stint") %>%
+  mutate(diferential = ifelse(is.na(diferential), 0, diferential)) %>%
+  mutate(dif_per_100_possessions = diferential/amount_possessions*100))
+
+####
+## TABLE TO MODEL 
+####
+
+df_model <- dependent_var %>% map2(.x =., .y = df_tidy, function(.x, .y) left_join(x = .x, y =.y, by = "stint"))
+
 
