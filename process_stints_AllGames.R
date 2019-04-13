@@ -5,7 +5,7 @@
 # El ultimo "inicia" al terminar el partido pero termina ahi mismo.
 rm(list = ls())
 library(tidyverse)
-
+source(here::here("functions.R"))
 # Me paro donde estan los rds
 setwd(here::here("data","raw","play_by_play"))
 
@@ -67,6 +67,7 @@ lineups <- list.files(pattern = ".rds") %>%
 
 accesor_lineup <- function(x) x$api_json$teamLineups
 accesor_away   <- function(x) x$api_json$game$awayTeam$id
+accesor_home   <- function(x) x$api_json$game$homeTeam$id
 
 # Me quedo con lo util
 lineups2 <- lineups %>%
@@ -80,6 +81,16 @@ away_teams <- lineups %>%
   map(., as.data.frame) %>%
   map(., .f = ~mutate(., status = -1)) %>%
   map(., set_names, c("team.id","status")) 
+
+# Marco el equipo local
+# le pongo status 1
+# lo uso solo para la parte de puntos por ahora
+home_teams <- lineups %>%
+  map(., pluck, accesor_home) %>%
+  map(., as.data.frame) %>%
+  map(., .f = ~mutate(., status = 11)) %>%
+  map(., set_names, c("team.id","status")) 
+
 
 # Juntos lineups con away
 
@@ -134,12 +145,12 @@ match_lineups3 <- map2(.x = match_lineups3, .y = match_players, .f = right_join,
 # falla el partido 35, no hay outogoing players y rompe, dropeo por ahora
 # drop 36 no se el error
 
-df4[[16]][19,]$data[[1]] <- df4[[16]][19,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 13869 | is.na(substitution.incomingPlayer.id))
-df4[[18]][20,]$data[[1]] <- df4[[18]][20,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 10139 | is.na(substitution.incomingPlayer.id))
-df4[[19]][13,]$data[[1]] <- df4[[19]][13,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 9169 | is.na(substitution.incomingPlayer.id))
-
-df4[35] <- NULL ; away_teams[[35]] <- NULL ; match_players[[35]] <- NULL; n_stints[[35]] <- NULL
-match_lineups3[[35]] <- NULL
+# df4[[16]][19,]$data[[1]] <- df4[[16]][19,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 13869 | is.na(substitution.incomingPlayer.id))
+# df4[[18]][20,]$data[[1]] <- df4[[18]][20,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 10139 | is.na(substitution.incomingPlayer.id))
+# df4[[19]][13,]$data[[1]] <- df4[[19]][13,]$data[[1]] %>% filter(substitution.incomingPlayer.id != 9169 | is.na(substitution.incomingPlayer.id))
+# 
+# df4[35] <- NULL ; away_teams[[35]] <- NULL ; match_players[[35]] <- NULL; n_stints[[35]] <- NULL
+# match_lineups3[[35]] <- NULL
 
 # Falla el 40 tambien. Encontrar una solucion mas integral...
  
@@ -159,7 +170,7 @@ str(match_lineups4, list.len = 3)
 for (j in 1:length(match_lineups3)){
   print(j)
   for (i in 2:(as.integer(n_stints[[j]])+1)){
-   if(j>900) print(i)
+   #if(j>900) print(i)
     
     # Me quedo con los que ya estaban en cancha
     match_lineups4[[j]][[i]] <- match_lineups4[[j]][[i-1]] %>% select(-substitution.team.id) %>% filter(status != "NA" & status != 0)
@@ -244,7 +255,7 @@ df_tidy <- pmap(list(x = initial_stint,y = df4,z = remdup1), function(x, y, z) {
     })
 
 
-
+saveRDS(object = df_tidy, file = here::here("data","working", "df_tidy.rds"))
 ####
 ## POINTS ##
 ####
@@ -252,15 +263,20 @@ df_tidy <- pmap(list(x = initial_stint,y = df4,z = remdup1), function(x, y, z) {
 # Proceso los puntos anotados durante el partido
 # Dropeo el 35 para que sea coherente con df4 y etc que dropee.
 raw_plays[[35]] <- NULL
+saveRDS(object = raw_plays, file = here::here("data","working", "raw_plays.rds"))
+# raw_plays <- readRDS(file = here::here("data","working", "raw_plays.rds"))
+## CAMBIAR HARDOCEDAD DE EEQUIPO VISITANTE
 
-points <- raw_plays %>% map(.,function(x) select(x,description, playStatus.quarter, playStatus.secondsElapsed, starts_with("fieldGoal"), starts_with("freeThrow")) %>%
+points <-pmap(list(.x = raw_plays , .y = away_teams, .z = home_teams) , .f = function(.x,.y,.z) select(.x,description, playStatus.quarter, playStatus.secondsElapsed, starts_with("fieldGoal"), starts_with("freeThrow")) %>%
   filter(fieldGoalAttempt.result == "SCORED" | freeThrowAttempt.result == "SCORED") %>% # jugadas o tiros libres anotados
   mutate(freeThrowAttempt.points = ifelse(freeThrowAttempt.result == "SCORED",1,0)) %>% # le agrego el valor de los FT
   mutate(abs_point = rowSums(.[,c("fieldGoalAttempt.points", "freeThrowAttempt.points")],na.rm = TRUE)) %>% # puntos anotados en la jugada
   mutate(fieldGoalAttempt.team.abbreviation = ifelse(is.na(fieldGoalAttempt.team.abbreviation),0,fieldGoalAttempt.team.abbreviation)) %>% # Clean porque si no fallaba al haber NA
   mutate( freeThrowAttempt.team.abbreviation = ifelse(is.na(freeThrowAttempt.team.abbreviation),0,freeThrowAttempt.team.abbreviation)) %>%  # Clean porque si no fallaba al haber NA
-  # Aca anoto transformo a negativos los puntos del visitante
-  mutate(multiplicador_puntos = ifelse(fieldGoalAttempt.team.abbreviation == "BOS" | freeThrowAttempt.team.abbreviation == "BOS", -1, ifelse(fieldGoalAttempt.team.abbreviation == "CLE" | freeThrowAttempt.team.abbreviation == "CLE", 1,0))) %>%
+  mutate(fieldGoalAttempt.team.id = ifelse(is.na(fieldGoalAttempt.team.id),0,fieldGoalAttempt.team.id)) %>% # Clean porque si no fallaba al haber NA
+  mutate( freeThrowAttempt.team.id = ifelse(is.na(freeThrowAttempt.team.id),0,freeThrowAttempt.team.id)) %>%
+    # Aca anoto transformo a negativos los puntos del visitante
+  mutate(multiplicador_puntos = ifelse(fieldGoalAttempt.team.id == .y$team.id | freeThrowAttempt.team.id == .y$team.id, -1, ifelse(fieldGoalAttempt.team.id == .z$team.id | freeThrowAttempt.team.id == .z$team.id, 1,0))) %>%
   # Diferencial de puntos, queda visto desde el Local. positivo es puntos a favor del local, negativos a favor del visitante
   # Va de la mano con la variable status de cada jugador. 1 para los locales, -1 para los visitantes
   mutate(diferencial = abs_point * multiplicador_puntos))
@@ -313,9 +329,16 @@ dependent_var <- possesions_by_stint %>% map2(.x = ., .y = point_diferential, fu
   mutate(dif_per_100_possessions = diferential/amount_possessions*100))
 
 ####
-## TABLE TO MODEL 
+## LIST OF TABLE TO MODEL 
 ####
 
 df_model <- dependent_var %>% map2(.x =., .y = df_tidy, function(.x, .y) left_join(x = .x, y =.y, by = "stint"))
+saveRDS(df_model, file = here::here("data","working", "df_model.rds"))
 
+#
 
+temp1 <- df_model %>%
+  map(., function(x) x %>% filter(.,is.na(stint) == FALSE))
+
+temp2 <- temp1 %>%
+  map(., unnest)
