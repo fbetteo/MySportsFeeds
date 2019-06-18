@@ -1,5 +1,3 @@
-# Prueba play by play
-
 
 # Nota. Cada Stint tiene variables temporales que denotan cuando inician.
 # El ultimo "inicia" al terminar el partido pero termina ahi mismo.
