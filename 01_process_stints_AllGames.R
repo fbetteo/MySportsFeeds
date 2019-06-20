@@ -260,7 +260,7 @@ saveRDS(object = df_tidy, file = here::here("data","working", "df_tidy.rds"))
 
 # Proceso los puntos anotados durante el partido
 # Dropeo el 35 para que sea coherente con df4 y etc que dropee.
-raw_plays[[35]] <- NULL
+#raw_plays[[35]] <- NULL
 saveRDS(object = raw_plays, file = here::here("data","working", "raw_plays.rds"))
 # raw_plays <- readRDS(file = here::here("data","working", "raw_plays.rds"))
 ## CAMBIAR HARDOCEDAD DE EEQUIPO VISITANTE

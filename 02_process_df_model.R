@@ -29,32 +29,47 @@ for (i in 1:length(df_model)){
  # Re looping to merge to each stint all the other players
  # NO FUNCA EL LIST INSIDE LIST POR LOOP
  # CORRER DE NUEVO BASES PORQUE EL 16 TIRA NULL
- 
- full_matrix_player <- vector(mode = "list")
+ full_matrix_player <- list()
+ full_matrix_player <- rep(list(list()),length(df_model))
  temp <- tibble()
  for (i in 1:length(df_model)){
+   #full_matrix_player[i] <- list()
    for (j in 1:length(df_model[[i]]$data)){
      print(i)
-     
+     if (is.null(df_model[[i]]$data[[j]]) == TRUE) {next};
      temp <- df_model[[i]]$data[[j]] %>%
        gather(., key = "player", value = "included") %>%
        mutate(player = as.integer(as.character(.$player))) %>%
        anti_join(x = list_player_stint, y = ., by = "player") %>%
        mutate(included = 0)
+     #browser()
      print(j)
-   full_matrix_player[[i]] <-  df_model[[i]]$data[[j]] %>% as_tibble(.) %>%
-     gather(., key = "player", value = "included") #%>%
-     #mutate(player = as.integer(as.character(.$player))) %>%
-     #rbind.data.frame(., temp)
+     temp2 <- df_model[[i]]$data[[j]] %>% as_tibble(.) %>%
+         gather(., key = "player", value = "included") %>%
+         mutate(player = as.integer(as.character(.$player))) %>%
+         rbind.data.frame(., temp)
+     full_matrix_player[[i]] <- c(full_matrix_player[[i]], list(temp2))
+ 
    }     
 }
- 
- full_matrix_player[1]
- df_model[[16]]$data[[34]]
- ww <- matrix_player_list_col[[1]] %>%
-   mutate(player = as.integer(player))
- aa <-  full_join(ww,list_player, by = "player")
- length(df_model[[16]]$data)
+
+
+full_matrix_player[2]
+
+full_matrix_player_tr = list()
+for (i in 1:length(full_matrix_player)){
+  full_matrix_player_tr[[i]] <- map(full_matrix_player[[i]], spread, key = player, value = included )
+}
+
+## HASTA ACA GENERA LISTA DE CADA PARTIDO Y A SU INTERIOR CADA STINT TIENE EL FORMATO CORRECTo
+## JUNTAR ESTO CON DF_MODEL
+
+
+
+#full_matrix_player_df <- map_df(full_matrix_player_tr, bind_rows) 
+head(full_matrix_player_df)
+full_matrix_player_tr[[1]]
+View(df_model[[16]])
  ## TENGO QUE JOINEAR TODO LOS JUGADORES DE LA LIGA CON LOS DEL PARTIDO PARA PONERLES 0
  ## Y TENGO QUE HACERLO POR STINT
  ## QUIZAS MEJOR HACERLO ANTES DE BINDEAR ROWS
