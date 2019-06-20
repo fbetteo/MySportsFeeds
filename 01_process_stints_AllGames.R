@@ -277,7 +277,9 @@ points <-pmap(list(.x = raw_plays , .y = away_teams, .z = home_teams) , .f = fun
   mutate(multiplicador_puntos = ifelse(fieldGoalAttempt.team.id == .y$team.id | freeThrowAttempt.team.id == .y$team.id, -1, ifelse(fieldGoalAttempt.team.id == .z$team.id | freeThrowAttempt.team.id == .z$team.id, 1,0))) %>%
   # Diferencial de puntos, queda visto desde el Local. positivo es puntos a favor del local, negativos a favor del visitante
   # Va de la mano con la variable status de cada jugador. 1 para los locales, -1 para los visitantes
-  mutate(diferencial = abs_point * multiplicador_puntos))
+  mutate(diferencial = abs_point * multiplicador_puntos) %>%
+  # Agregamos fix para las faltas tecnicas en el segundo 0. Rompen "merge_stint"
+  mutate(playStatus.secondsElapsed = ifelse(playStatus.secondsElapsed == 0, 1 , playStatus.secondsElapsed)))
 
 
 # Tabla temporal con los stints del partido y su inicio/fin para mergear con la de puntos y ubicarlos dentro de cada stint
@@ -307,7 +309,8 @@ possessions <- raw_plays %>% map(., function(x) select(x, description, playStatu
                                     turnover.type) %>%
   mutate(end_possession = ifelse(fieldGoalAttempt.result == "SCORED" | rebound.type == "DEFENSIVE" |  is.na(turnover.type) == FALSE | 
                                    (freeThrowAttempt.result == "SCORED" & freeThrowAttempt.attemptNum == freeThrowAttempt.totalAttempts), 1, 0)) %>%
-  filter(end_possession == 1))
+  filter(end_possession == 1) %>%
+    mutate(playStatus.secondsElapsed = ifelse(playStatus.secondsElapsed == 0, 1 , playStatus.secondsElapsed)))
 
 
 possessions_stint <- map2(.x = temp_stint, .y = possessions, merge_stint)
