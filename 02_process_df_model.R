@@ -28,6 +28,7 @@ for (i in 1:length(df_model)){
    rename(player = value) %>%
    arrange(player)
   
+
  # Re looping to merge to each stint all the other players
  # NO FUNCA EL LIST INSIDE LIST POR LOOP
  # CORRER DE NUEVO BASES PORQUE EL 16 TIRA NULL
