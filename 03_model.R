@@ -1,9 +1,10 @@
 # Regression
-install.packages("caret")
+
 rm(list = ls())
 library(tidyverse)
 
 matrix_model <- readRDS(here::here("data","working","matrix_model.rds"))
+lineups3 <- readRDS(here::here("data","working","lineups3.rds"))
 View(head(matrix_model))
 
 # Ridge
@@ -29,8 +30,8 @@ model <- glmnet::glmnet(x, y, alpha = 0, lambda = cv$lambda.min)
 # Display regression coefficients
 coef(model)
 
-
-
+model$beta
+head(x.test)
 # Make predictions on the test data
 x.test <- model.matrix(dif_per_100_possessions ~., matrix_model[,-c(1:3)])[,-1]
 predictions <- model %>% predict(x.test) %>% as.vector()
@@ -41,9 +42,10 @@ data.frame(
 )
 
 
+# Alpha = 0
 bb <- coef(model)@x %>% 
   as.matrix() %>%
-  as.tibble() %>%
+  as_tibble() %>%
   add_column(playerid = coef(model)@Dimnames[[1]]) %>%
   rename(coef = V1)%>%
   arrange(desc(coef)) %>%
@@ -51,6 +53,16 @@ bb <- coef(model)@x %>%
 str(bb)
 str(coef(model))
 coef(model)
+coef(model)@Dimnames[[1]][1:3]
+# Alpha = 1
+bb <- coef(model)@x %>% 
+  as.matrix() %>%
+  as_tibble() %>%
+  add_column(playerid = c("intercept",coef(model)@Dimnames[[1]][coef(model)@i[-1]+1])) %>%
+  rename(coef = V1)%>%
+  arrange(desc(coef)) %>%
+  mutate(playerid = str_remove(playerid, "x"), playerid = as.integer(playerid)) 
+
 
 list2 <- lineups3 %>%
   bind_rows() %>%
@@ -60,6 +72,11 @@ list2 <- lineups3 %>%
 
 cc <- bb %>%
   inner_join(., list2, by = "playerid")
+
+
+dd <- cc %>% group_by(team.abbreviation) %>%
+  summarise(coef_total =sum(coef)) %>%
+  arrange(coef_total)
 
 ### DA COMO EL ORTO
 ## VER COMO SACAR LOS QUE JUEGAN MENOS DE X MINUTOS

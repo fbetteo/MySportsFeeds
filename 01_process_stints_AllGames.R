@@ -97,6 +97,8 @@ lineups3 <- map2(.x = lineups2, .y = away_teams, .f = left_join, by = "team.id")
   map(., select, -expected.lineupPositions) %>%
   map(., unnest)
 
+saveRDS(lineups3, file = here::here("data","working", "lineups3.rds"))
+
 # Genero lista vacia que va a tener cada equipo en cancha durante los stints.
 # Lista de listas.
 

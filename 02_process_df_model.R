@@ -1,5 +1,10 @@
 # From list ot DF
 
+# Parameter
+# Minimum possessions required to be taken into accout
+cutoff_pos <- 2000 # first quarter. Jugadores con al menos X posesiones en la temporada
+cutoff_stint <- 5 # first quarter. Stints con al menos X posesiones.
+
 rm(list = ls())
 library(tidyverse)
 
@@ -15,10 +20,11 @@ temp <-tibble()
 for (i in 1:length(df_model)){
   matrix_player_list[[i]] <-  df_model[[i]]$data %>%
     bind_rows() %>%
-    tibble::add_column(stint = df_model[[i]]$stint)
+    tibble::add_column(stint = df_model[[i]]$stint, amount_possessions = df_model[[i]]$amount_possessions)
+                       
   matrix_player_list_col[[i]] <- matrix_player_list[[i]]  %>%
     # mutate(stint = as.integer(row.names(.))- 1 )  %>% # -1 porque empieza en 0
-    gather(., key = "player", value = "included", -c("stint"))
+    gather(., key = "player", value = "included", -c("stint", "amount_possessions"))
   temp <- rbind(temp, data.frame(player = unique(matrix_player_list_col[[i]]$player)))
 }
 
@@ -27,19 +33,47 @@ for (i in 1:length(df_model)){
  list_player_stint <- as.integer(as.character(unique(temp$player))) %>% tibble::enframe(name = NULL) %>%
    rename(player = value) %>%
    arrange(player)
-  
 
+# Removing PLayers that played too little.
+ 
+ # Possessions in court
+ possessions_in_court_player <- map(matrix_player_list_col, .f =  . %>% filter(included != 0) %>%
+                                group_by(player) %>%
+                                  summarise(n_possessions = sum(amount_possessions)))
+ possessions_in_court_player_bind <- bind_rows(possessions_in_court_player) %>%
+   group_by(player) %>%
+   summarise(n_possessions = sum(n_possessions))
+                                
+# Plot to see distribution and pick a threshold
+(g_pos <-  ggplot(data = possessions_in_court_player_bind) +
+  geom_histogram(aes(x = n_possessions), binwidth = 130, color = "black", fill = "white"))
+ 
+ summary(possessions_in_court_player_bind)
+ # Pruebo dejando fuera el primer cuartil. 1011
+ 
+ keep_players_possessions <- possessions_in_court_player_bind %>%
+   filter(n_possessions > cutoff) %>% 
+   select(player) %>%
+   unlist() %>%
+   as.integer()
+ 
+ # Removing stints with too little possessions
+  possessions_per_stint <- bind_rows(matrix_player_list_col)
+  summary(possessions_per_stint$amount_possessions)
+  (g_pos_stints <-  ggplot(data = possessions_per_stint) +
+      geom_histogram(aes(x = amount_possessions), binwidth = 1, color = "black", fill = "white"))
+  # First Q = 3
  # Re looping to merge to each stint all the other players
- # NO FUNCA EL LIST INSIDE LIST POR LOOP
- # CORRER DE NUEVO BASES PORQUE EL 16 TIRA NULL
+
  full_matrix_player <- list()
  full_matrix_player <- rep(list(list()),length(df_model))
  temp <- tibble()
  for (i in 1:length(df_model)){
    #full_matrix_player[i] <- list()
    for (j in 1:length(df_model[[i]]$data)){
-     print(i)
+     if (i%%10 == 0){print(i)}
      if (is.null(df_model[[i]]$data[[j]]) == TRUE) {next};
+     
      temp <- df_model[[i]]$data[[j]] %>%
        gather(., key = "player", value = "included") %>%
        mutate(player = as.integer(as.character(.$player))) %>%
@@ -47,10 +81,12 @@ for (i in 1:length(df_model)){
        mutate(included = 0)
      #browser()
      print(j)
-     temp2 <- df_model[[i]]$data[[j]] %>% as_tibble(.) %>%
+    
+      temp2 <- df_model[[i]]$data[[j]] %>% as_tibble(.) %>%
          gather(., key = "player", value = "included") %>%
          mutate(player = as.integer(as.character(.$player))) %>%
-         rbind.data.frame(., temp)
+         rbind.data.frame(., temp) %>%
+        filter(player %in% keep_players_possessions)
      full_matrix_player[[i]] <- c(full_matrix_player[[i]], list(temp2))
  
    }     
@@ -75,7 +111,8 @@ match_matrix_player_tr <- map(full_matrix_player_tr, bind_rows)
 match_full_matrix <- map2(stints_differential, match_matrix_player_tr, cbind.data.frame)
 
 # Tibble with all needed to model
-matrix_model <- bind_rows(match_full_matrix)
+matrix_model <- bind_rows(match_full_matrix) %>%
+  filter(amount_possessions > cutoff_stint)
 
 
 saveRDS(matrix_model, file = here::here("data","working", "matrix_model.rds"))
