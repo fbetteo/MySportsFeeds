@@ -20,13 +20,13 @@ str(x)
 
 # Find the best lambda using cross-validation
 set.seed(123) 
-cv <- glmnet::cv.glmnet(x, y, alpha = 0)
+cv <- glmnet::cv.glmnet(x, y, alpha = 1, weights = matrix_model$amount_possessions )
 # Display the best lambda value
 cv$lambda.min
 
 
 # Fit the final model on the training data
-model <- glmnet::glmnet(x, y, alpha = 0, lambda = cv$lambda.min)
+model <- glmnet::glmnet(x, y, alpha = 1, lambda = cv$lambda.min, weights = matrix_model$amount_possessions)
 # Display regression coefficients
 coef(model)
 
@@ -58,6 +58,7 @@ coef(model)@Dimnames[[1]][1:3]
 bb <- coef(model)@x %>% 
   as.matrix() %>%
   as_tibble() %>%
+  #add_column(playerid = coef(model)@Dimnames[[1]][coef(model)@i]) %>%
   add_column(playerid = c("intercept",coef(model)@Dimnames[[1]][coef(model)@i[-1]+1])) %>%
   rename(coef = V1)%>%
   arrange(desc(coef)) %>%
@@ -67,7 +68,12 @@ bb <- coef(model)@x %>%
 list2 <- lineups3 %>%
   bind_rows() %>%
   distinct(player.id, player.firstName, player.lastName, team.abbreviation) %>%
-  rename(playerid = player.id)
+  rename(playerid = player.id) %>%
+  group_by(playerid) %>% arrange(playerid) %>%
+  filter(row_number() == n()) %>% # para quedarse con el ultimo equipo 
+  ungroup() %>%
+  arrange(team.abbreviation)
+  
 
 
 cc <- bb %>%

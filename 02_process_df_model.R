@@ -52,7 +52,7 @@ for (i in 1:length(df_model)){
  # Pruebo dejando fuera el primer cuartil. 1011
  
  keep_players_possessions <- possessions_in_court_player_bind %>%
-   filter(n_possessions > cutoff) %>% 
+   filter(n_possessions > cutoff_pos) %>% 
    select(player) %>%
    unlist() %>%
    as.integer()
