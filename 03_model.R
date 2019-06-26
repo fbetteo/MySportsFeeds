@@ -20,13 +20,13 @@ str(x)
 
 # Find the best lambda using cross-validation
 set.seed(123) 
-cv <- glmnet::cv.glmnet(x, y, alpha = 1, weights = matrix_model$amount_possessions )
+cv <- glmnet::cv.glmnet(x, y, alpha = 0, weights = matrix_model$amount_possessions, standardize = FALSE )
 # Display the best lambda value
 cv$lambda.min
 
 
 # Fit the final model on the training data
-model <- glmnet::glmnet(x, y, alpha = 1, lambda = cv$lambda.min, weights = matrix_model$amount_possessions)
+model <- glmnet::glmnet(x, y, alpha = 0, lambda = cv$lambda.min, weights = matrix_model$amount_possessions, standardize = FALSE)
 # Display regression coefficients
 coef(model)
 
