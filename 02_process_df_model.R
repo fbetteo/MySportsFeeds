@@ -1,11 +1,11 @@
 # From list ot DF
-
+rm(list = ls())
 # Parameter
 # Minimum possessions required to be taken into accout
-cutoff_pos <- 2000 # first quarter. Jugadores con al menos X posesiones en la temporada
+cutoff_pos <- 1011 # first quarter. Jugadores con al menos X posesiones en la temporada
 cutoff_stint <- 5 # first quarter. Stints con al menos X posesiones.
 
-rm(list = ls())
+
 library(tidyverse)
 
 df_model <- readRDS(here::here("data","working","df_model.rds"))
