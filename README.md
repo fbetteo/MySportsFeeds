@@ -2,9 +2,14 @@
 
 ### Important Stuff
 
-Links: https://squared2020.com/2017/09/18/deep-dive-on-regularized-adjusted-plus-minus-i-introductory-example/
-https://squared2020.com/2017/09/18/deep-dive-on-regularized-adjusted-plus-minus-ii-basic-application-to-2017-nba-data-with-r/
-https://squared2020.com/2018/12/24/regularized-adjusted-plus-minus-part-iii-what-had-really-happened-was/
+Links: 
+* https://squared2020.com/2017/09/18/deep-dive-on-regularized-adjusted-plus-minus-i-introductory-example/
+* https://squared2020.com/2017/09/18/deep-dive-on-regularized-adjusted-plus-minus-ii-basic-application-to-2017-nba-data-with-r/
+* https://squared2020.com/2018/12/24/regularized-adjusted-plus-minus-part-iii-what-had-really-happened-was/
+* http://www.sloansportsconference.com/wp-content/uploads/2015/09/joeSillSloanSportsPaperWithLogo.pdf
+* http://bjlkeng.github.io/posts/probabilistic-interpretation-of-regularization/
+* https://podcasts.apple.com/us/podcast/1-ryan-davis-adjusted-plus-minus-and-friends/id1469516033?i=1000443010829
+
 
 ### Adjusted +-
 
