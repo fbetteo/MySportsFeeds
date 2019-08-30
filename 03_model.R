@@ -31,9 +31,10 @@ model <- glmnet::glmnet(x, y, alpha = 0, lambda = cv$lambda.min, weights = matri
 coef(model)
 
 model$beta
-head(x.test)
+
 # Make predictions on the test data
 x.test <- model.matrix(dif_per_100_possessions ~., matrix_model[,-c(1:3)])[,-1]
+head(x.test)
 predictions <- model %>% predict(x.test) %>% as.vector()
 # Model performance metrics
 data.frame(
@@ -78,11 +79,12 @@ list2 <- lineups3 %>%
 
 cc <- bb %>%
   inner_join(., list2, by = "playerid")
-
+saveRDS(cc, "output/tables/player_ranking.rds")
 
 dd <- cc %>% group_by(team.abbreviation) %>%
   summarise(coef_total =sum(coef)) %>%
   arrange(coef_total)
+saveRDS(dd, "output/tables/team_ranking.rds")
 
 ### DA COMO EL ORTO
 ## VER COMO SACAR LOS QUE JUEGAN MENOS DE X MINUTOS
