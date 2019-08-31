@@ -112,3 +112,24 @@ check_stints_matchlineups4 <- function(x) {
     set_names(., "chequeo") %>%
     (function(x3) nrow(x3) == sum(x3$chequeo))
 }
+
+## Funcion para calcular el SE de los coeficientes de Ridge
+## Obtenida de https://www.reddit.com/r/statistics/comments/1vg8k0/standard_errors_in_glmnet/
+## Son SE sesgados. El modelo no tiene que tener intercepto
+
+ridge_se <- function(xs,y,yhat,my_mod){
+  # Note, you can't estimate an intercept here
+  x2 <- as.matrix(xs)
+  n <- dim(x2)[1]
+  k <- dim(x2)[2]
+  sigma_sq <- sum((y-predictions)^2)/ (n-k)
+  lam <- model$lambda
+  if(is.null(model$lambda)==TRUE){lam <- 0}
+  i_lams <- matrix(diag(x=1,nrow=k,ncol=k))# ,sparse=TRUE)
+  xpx <- t(x2)%*%x2
+  xpxinvplam <- solve(xpx+lam*as.vector(i_lams))
+  var_cov <- sigma_sq * (xpxinvplam %*% xpx %*% xpxinvplam)
+  se_bs <- sqrt(diag(var_cov))
+  print('NOTE: These standard errors are very biased.')
+  return(se_bs)
+}

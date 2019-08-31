@@ -33,8 +33,23 @@ Tanto para la consulta de la API como para el manejo y procesamiento de los dato
 
 La metodología para calcular la métrica "plus minus ajustado" implica correr una regresión Ridge (regularización con *l2*) donde la variable dependiente es el diferencial de puntos por segmento y las variables independientes son los jugadores en cancha. La idea de fondo es calcular el aporte de cada jugador al diferencial, controlando por sus compañeros y por los advsersarios. Se intenta eliminar el factor que sobreestima el aporte de algún jugador solo por el hecho de compartir tiempo en cancha con compañeros de primer nivel, que son los que generan realmente los diferenciales positivos. De la misma manera se intenta no sobreestimar a los jugadores que anotan muchos puntos contra equipos de baja performance o que solo juegan en los minutos llamados "basura" que corresponden a los minutos finales de un partido cuando ya está todo definido y suelen haber jugadores de menor nivel. 
 Dado que es una regresión lineal los coeficientes pueden interpretarse como un proxy del aporte neto de cada jugador, ya descontados los aportes del resto. Dada la codificación de variables postiva para el local y negativa para visitantes, todo signo positivo de un coeficiente es aporte real en puntos y negativo es tendencia a recibir más puntos que los que se convierten con el jugador en cancha.  
-Los equipos suelen tener una plantilla de alrededor de 10 jugadores activos y los que más minutos disputan suelen ser menos aún por lo tanto es de esperar que haya una gran correlación entre los jugadores de cada equipo. Este es el principal motivo por el que se decide ir por una regresión regularizada y no una regresión lineal multivariada clásica. Ridge lo que hace es reducir la varianza de los coeficientes incluyendo una penalización *l2* que implica reducir mínimos cuadrados sumado a la diferencia al cuadrado de los coeficientes respecto de 0. Esto último ponderado por un parámetro $\lambda$ a definir. A mayor $\lambda$ la penalización es mayor y los coeficientes tienden a valores cercanos a 0. El procedimiento reduce la varianza de los coeficientes a costa de introducir un sesgo en su estimación, pero que de tener éxito, el tradeoff es tal que las predicciones son más certeras a pesar de no ser insesgado.  
+Los equipos suelen tener una plantilla de alrededor de 10 jugadores activos y los que más minutos disputan suelen ser menos aún por lo tanto es de esperar que haya una gran correlación entre los jugadores de cada equipo. Este es el principal motivo por el que se decide ir por una regresión regularizada y no una regresión lineal multivariada clásica.  
+Ridge lo que hace es reducir la varianza de los coeficientes incluyendo una penalización *l2* que implica reducir mínimos cuadrados sumado a la diferencia al cuadrado de los coeficientes respecto de 0. Esto último ponderado por un parámetro $\lambda$ a definir. A mayor $\lambda$ la penalización es mayor y los coeficientes tienden a valores cercanos a 0. El procedimiento reduce la varianza de los coeficientes a costa de introducir un sesgo en su estimación, pero que de tener éxito, el tradeoff es tal que las predicciones son más certeras a pesar de no ser insesgado.  
 
+Formalmente el modelo especificado es:
+
+INSERTAR FORMA FUNCIONAL DEL MODELO
+
+
+Para estimar los coeficientes en vez de utilizar mínimos cuadrados que implica minimizar las diferencias al cuadrado de las predicciones frente al valor real
+
+INESRTAR MINIMIZACION DE OLS
+
+Lo que se hace en Ridge es minimizar:
+
+INSERTAR MINIMZACION DE RIDGE
+
+CONTINUAR CON DESCRIPCION
 Algunos aspectos metodológicos a tener en cuenta:
 
 * Se eliminó el primer cuartil de jugadores medido en cantidad de posesiones en toda la temporada para reducir la dimensionalidad del problema. Son jugadores con pocos minutos en cancha y perjudican más de lo que aportan.
@@ -53,6 +68,9 @@ knitr::kable(head(player_ranking,10))
 ```
 
 Puede discutirse el orden y si falta algún jugador importante de la liga pero no es un primer ranking totalmente descabellado. Son jugadores de primer nivel y varios de ellos son "indiscutidos". Sin embargo todavía no se hizo análisis de varianza de los coeficientes para ver intervalos de confianza y qué tan concluyente es figurar más arriba en el ranking respecto a otros jugadores. Quizás es solo por la muestra elegida.    
+
+HABLAR DE LOS DESVIOS ESTANDAR DE LOS COEFICIENTES Y ENTENDER POR QUE NO SON COMO EN OLS (BIASED?)
+
 
 Por otra parte luego sumamos los coeficientes de cada jugador por equipo y armamos un ranking de equipos conformado por esta agregación. Nuevamente los resultados son bastante creíbles, particularmente en la parte alta de la tabla donde los equipos que más ganaron en la temporada regular figuran en los primeros puestos. Hay alguna situación excepcional como Washington que figura ante último y se clasificó a la instancia de playoffs (posterior a la temporada regular) y por lo tanto su posición en la tabla no condice con su resultado real. Ver tabla \ref{tab:team_ranking}.
 
