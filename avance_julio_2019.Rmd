@@ -29,6 +29,8 @@ Esta tabla esta conformada con todos los equipos de la liga y para cada partido 
 
 Tanto para la consulta de la API como para el manejo y procesamiento de los datos se utilizó el lenguaje R [^4]
 
+INCLUIR HEAD DE LA TABLA O MANDAR A APENDICE
+
 #### Modelo
 
 La metodología para calcular la métrica "plus minus ajustado" implica correr una regresión Ridge (regularización con *l2*) donde la variable dependiente es el diferencial de puntos por segmento y las variables independientes son los jugadores en cancha. La idea de fondo es calcular el aporte de cada jugador al diferencial, controlando por sus compañeros y por los advsersarios. Se intenta eliminar el factor que sobreestima el aporte de algún jugador solo por el hecho de compartir tiempo en cancha con compañeros de primer nivel, que son los que generan realmente los diferenciales positivos. De la misma manera se intenta no sobreestimar a los jugadores que anotan muchos puntos contra equipos de baja performance o que solo juegan en los minutos llamados "basura" que corresponden a los minutos finales de un partido cuando ya está todo definido y suelen haber jugadores de menor nivel. 
@@ -36,26 +38,49 @@ Dado que es una regresión lineal los coeficientes pueden interpretarse como un 
 Los equipos suelen tener una plantilla de alrededor de 10 jugadores activos y los que más minutos disputan suelen ser menos aún por lo tanto es de esperar que haya una gran correlación entre los jugadores de cada equipo. Este es el principal motivo por el que se decide ir por una regresión regularizada y no una regresión lineal multivariada clásica.  
 Ridge lo que hace es reducir la varianza de los coeficientes incluyendo una penalización *l2* que implica reducir mínimos cuadrados sumado a la diferencia al cuadrado de los coeficientes respecto de 0. Esto último ponderado por un parámetro $\lambda$ a definir. A mayor $\lambda$ la penalización es mayor y los coeficientes tienden a valores cercanos a 0. El procedimiento reduce la varianza de los coeficientes a costa de introducir un sesgo en su estimación, pero que de tener éxito, el tradeoff es tal que las predicciones son más certeras a pesar de no ser insesgado.  
 
+#### Formalización
+
 Formalmente el modelo especificado es:
 
-INSERTAR FORMA FUNCIONAL DEL MODELO
+$$Y = \sum_1^n{\beta_iX_i} + \epsilon $$
 
+Donde Y es el diferencial de puntos visto desde el equipo local y las X son las variables de presencia/ausencia de cada jugador del partido. Siendo estrictos, en la matriz estarán todos los jugadores de la liga por lo que las X incluyen a muchísimos jugadores que no son parte del partido pero obviamente tendrán valor 0 y no tendrán injerencia en la suma. Los $\beta$ son los coeficientes de la regresión.
 
-Para estimar los coeficientes en vez de utilizar mínimos cuadrados que implica minimizar las diferencias al cuadrado de las predicciones frente al valor real
+Dado nuestro modelo, lo siguiente es preguntarse cómo estimar los coeficientes con los datos que tenemos a disposición.  Mínimos cuadrados ordinarios (MCO) es posiblemente la primera opción dado que sus coeficientes tienen propiedades interesantes: los estimadores son insesgados y si se cumplen ciertas condiciones sobre los errores del modelo también son los estimadores de mínima varianza dentro de los insesgados.
 
-INESRTAR MINIMIZACION DE OLS
+Los estimadores de MCO se obtienen mediante
+$$\hat \beta = arg min \text{    } S(\beta) $$
+donde 
+$$S(\beta) = \sum_{i=1}^n{(y_i - \sum_{j=1}^p{X_{ij}\beta_j)^2}}$$
 
-Lo que se hace en Ridge es minimizar:
+A pesar de mantener la propiedad de insesgadez, estos estimadores son bastante sensibles a la alta correlación entre variables ya que al existir en planos muy próximos existen mayor cantidad de combinaciones lineales entre ambas variables que dan resultados similares en cuanto al ajuste del modelo. Esto se traduce en que los estimadores de MCO puedan variar mucho entre distintas muestras de la misma población, es decir que son estimadores con varianza elevada. Aunque en promedio los estimadores se centren en los verdaderos valores de $\beta$, lo van a hacer de manera muy errática y los valores que encontremos en nuestra muestra no van a ser confiables y por lo tanto nuestras predicciones tampoco.
 
-INSERTAR MINIMZACION DE RIDGE
+En este momento es donde hay que tener en mente el tradeoff entre sesgo y varianza de un modelo. Este concepto nos dice que el error cuadrático medio (MSE por sus siglas en inglés) de un set de testeo puede descomponerse entre sesgo elevado al cuadrado más varianza - del modelo estimado y aplicada a la nueva observación - más la varianza del error irreducible del proceso generador de datos.  
+El último elemento está fijo pero los primeros dos varían según el modelo utilizado y estimado. En general modelos más flexibles tienden a tener menor sesgo ya que pueden ajustarse mejor a las no linealidades de los datos pero a su vez suelen tener más varianza ya que cambios en los datos tienen impacto sobre cómo ajustan entre muestras distintas.
+Dijimos que MCO sufre de alta varianza en sus estimadores ante presencia de variables correlacionadas y como mencionamos, el dataset de este trabajo presenta tal característica ya que los jugadores de un equipo son pocos y suelen compartir minutos en cancha de manera reiterada. La propuesta de utilizar una regresión Ridge apunta a tratar de sobrepasar la problemática de la alta varianza. El mecanismo es que Ridge agrega una penalización a la minimización del desvío cuadrático respecto a cero y eso genera dos consecuencias:
 
-CONTINUAR CON DESCRIPCION
-Algunos aspectos metodológicos a tener en cuenta:
+* Los estimadores dejan de ser insesgados ya que se los restringe al penalizar su alejamiento de 0.
+* Los estimadores ven su varianza reducida ya que se limita el espacio de búsqueda.
+
+Formalmente la minimización es la siguiente:
+$$S(\beta) = \sum_{i=1}^n{(y_i - \sum_{j=1}^p{X_{ij}\beta_j)^2}} + \lambda \sum_{j=1}^p{\beta_j^2}$$
+
+Donde $\lambda$ es un hiperparámetro que regula el peso de la penalización en la función de costo. Mayores (menores) valores de $\lambda$ hacen más (menos) costosos los desvíos de los estimadores respecto de cero. En los extremos, si $\lambda = 0$, los estimadores son los mismos que MCO y si $\lambda = +\infty$ todos los estimadores son 0 y queda solo el intercepto. 
+El objetivo de incluir la penalización es agregar un poco de sesgo a cambio de reducir en mayor medida la componente de varianza del MSE mediante la restricción que se aplica sobre los coeficientes estimados. El éxito de este enfoque depende en gran medida del $\lambda$ elegido.
+Para seleccionar el valor de $\lambda$ la práctica habitual es hiperparametrizar el modelo medianto crossvalidation.
+
+#### Aplicación
+
+Mencionamos a continuación algunos aspectos metodológicos a tener en cuenta:
 
 * Se eliminó el primer cuartil de jugadores medido en cantidad de posesiones en toda la temporada para reducir la dimensionalidad del problema. Son jugadores con pocos minutos en cancha y perjudican más de lo que aportan.
+INCLUIR GRAFICO QUE MUESTRA QUE SON BASURA
 * Se eliminaron las observaciones con menos de 5 posesiones (provisorio. Falta definir con algún criterio) ya que no se las considera representativas. Mucha varianza en diferenciales con tan poco tiempo de juego.
 * Se normalizaron los datos de diferencial de puntos cada 100 posesiones para hacer comparables los segmentos de tiempo.
 * Para calcular el $\lambda$ óptimo se aplicó Cross Validation con 10 folds. Luego se utiliza el $\lambda$ definido en el entrenamiento con  todo el set de training.  
+
+
+CONTAR QUE SE USO GLMNET Y ESCRIBIR UN POCO DE ESO
 
 Aplicando lo comentado al set de datos construido y aplicando CV para obtener $\lambda$ se obtienen los primeros resultados provisorios.
 $\lambda = 1.369778$
