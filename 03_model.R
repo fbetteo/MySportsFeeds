@@ -43,7 +43,7 @@ data.frame(
   Rsquare = caret::R2(predictions, matrix_model$dif_per_100_possessions)
 )
 
-
+# Desvios estandar
 se_of_ridge = ridge_se(x,y,predictions,model) 
 
 # Alpha = 0
@@ -82,7 +82,8 @@ list2 <- lineups3 %>%
 
 
 cc <- bb %>%
-  inner_join(., list2, by = "playerid")
+  inner_join(., list2, by = "playerid") %>%
+  select(playerid, player.firstName, player.lastName, team.abbreviation, coef, sd)
 saveRDS(cc, "output/tables/player_ranking.rds")
 
 dd <- cc %>% group_by(team.abbreviation) %>%

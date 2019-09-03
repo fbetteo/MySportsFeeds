@@ -1,12 +1,12 @@
 ---
-title: "Avance de trabajo de especializacion: Plus Minus Ajustado para la NBA"
+title: "Trabajo Especializacion"
 author: "Franco Betteo"
-date: "27 July 2019"
+date: "01/09/2019"
 output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 ```
 
 ```{r library}
@@ -82,7 +82,7 @@ Mencionamos a continuación algunos aspectos metodológicos a tener en cuenta:
 
 * Se eliminó el primer cuartil de jugadores medido en cantidad de posesiones en toda la temporada para reducir la dimensionalidad del problema. Son jugadores con pocos minutos en cancha y perjudican más de lo que aportan.
 
-```{r }
+```{r}
 df_model <- readRDS(here::here("data","working","df_model.rds"))
 
 # Need to add 0 for all the other players not involved.
@@ -113,12 +113,12 @@ for (i in 1:length(df_model)){
 # Plot to see distribution and pick a threshold
 ggplot(data = possessions_in_court_player_bind) +
   geom_histogram(aes(x = n_possessions), binwidth = 130, color = "black", fill = "white") + 
-  geom_vline(xintercept = quantile(possessions_in_court_player_bind$n_possessions, probs = 0.25), colour = "blue") + 
+  geom_vline(xintercept = quantile(possessions_in_court_player_bind$n_possessions, probs = 0.25), colour = "blue", size = 1.5) + 
   annotate(geom = "text", x = 2500, y = 20, label = "Primer Cuartil")
 
 ```
 
-* Se eliminaron las observaciones con menos de 5 posesiones (provisorio. Falta definir con algún criterio) ya que no se las considera representativas. Mucha varianza en diferenciales con tan poco tiempo de juego.
+* Se eliminaron las observaciones con menos de 5 posesiones. Este número corresponde a la mediana de la cantidad de posesiones por observación. Se considera que observaciones con menos de esa cantidad de posesiones no son representativas y aumentan el ruido dentro del modelo.
 
 ```{r}
 possessions_per_stint <- bind_rows(matrix_player_list_col)
@@ -131,24 +131,61 @@ summary(possessions_per_stint$amount_possessions)
 
 
 * Se normalizaron los datos de diferencial de puntos cada 100 posesiones para hacer comparables los segmentos de tiempo.
-* Para calcular el $\lambda$ óptimo se aplicó Cross Validation con 10 folds. Luego se utiliza el $\lambda$ definido en el entrenamiento con  todo el set de training.  
 
 
-CONTAR QUE SE USO GLMNET Y ESCRIBIR UN POCO DE ESO
+  Una vez preprocesados todos los datos y habiendo definido el modelo, procedemos a la etapa de correr el modelo.
+  La librería que vamos a utilizar es *glmnet*[^5].  
+  Dijimos que uno de los hiperparámetros de la regresión Ridge es $\lambda$ que define el peso de la penalización. Lo primero que hacemos es definir qué valor va a tomar para nuestro problema. La solución propuesta es el calcular el $\lambda$ óptimo mediante Cross Validation con 10 folds. La librería provée la función *cv.glmnet* para tal fin, donde lo que hace es dividir el set de datos en 10 subsets y entrenar un modelo con 9 de los 10 subsets y validarlo con el décimo. Así para cada combinación de subsets. Esto lo realiza reiteradas veces para distintos valores de $\lambda$. Finalmente calcula el error cuadrático medio para cada $\lambda$ en los sets de validación. Entre todos esos resultados buscamos el $\lambda$ cuyo error promedio en validación sea el menor y será el que utilicemos para nuestro modelo con todos los datos.
 
-Aplicando lo comentado al set de datos construido y aplicando CV para obtener $\lambda$ se obtienen los primeros resultados provisorios.
+
+Al aplicar este procedimiento obtenemos el óptimo para nuestro set de datos:
 $\lambda = 1.369778$
 
-Y resumiendo los primeros diez jugadores según el coeficiente obtenido.
+Tomando este valor de $\lambda$, lo siguiente es correr el modelo Ridge con todo el training set imputando ese valor para el hiperparámetro.
+
+A continuación mostramos los primeros diez jugadores según el coeficiente obtenido (de mayor a menor), donde un coeficiente más elevado está asociado a mayor diferencial de puntos a favor mientras se está en cancha, controlando por el resto de los jugadores presentes (compañeros como oponentes).
+
 ```{r player_ranking}
 library(kableExtra)
 player_ranking = readRDS("output/tables/player_ranking.rds")
-knitr::kable(head(player_ranking,10))
+knitr::kable(head(player_ranking %>% select(-sd),10))
 ```
 
-Puede discutirse el orden y si falta algún jugador importante de la liga pero no es un primer ranking totalmente descabellado. Son jugadores de primer nivel y varios de ellos son "indiscutidos". Sin embargo todavía no se hizo análisis de varianza de los coeficientes para ver intervalos de confianza y qué tan concluyente es figurar más arriba en el ranking respecto a otros jugadores. Quizás es solo por la muestra elegida.    
+Puede discutirse el orden y si falta algún jugador importante de la liga pero no es un primer ranking totalmente descabellado. Son jugadores de primer nivel y varios de ellos son "indiscutidos". Es destacable que en 10 jugadores haya 3 duplas que comparten equipo. Es posible que esté relacionado a cierta correlación en la presencia de estos jugadores en cancha y a su vez se de en equipos que han tenido muchas victorias en la temporada. Covington, Gordon y Livingston son de alguna manera una sorpresa en este ranking. 
 
-HABLAR DE LOS DESVIOS ESTANDAR DE LOS COEFICIENTES Y ENTENDER POR QUE NO SON COMO EN OLS (BIASED?)
+Viendo el ranking surge una nueva pregunta. ¿Qué tan precisos son esos coeficientes? ¿ Qué tan estable es ese ranking?  
+La manera de cuantificar esto en una regresión lineal es calcular los desvíos estándar de los coeficientes estimados. Hay un punto muy importante a mencionar respecto a esto. La regresión Ridge es lineal en parámetros pero como dijimos, incluye una penalización y eso lleva a que los coeficientes sean sesgados. Dicho esto, los desvíos estándar que calculemos serán sobre parámetros estimados que no sabemos en principio qué tan lejos están en promedio de los verdaderos parámetros si el modelo especificado fuera el correcto. Es posible un escenario donde gran parte del MSE de nuestra regresión se de por el sesgo y la varianza no contribuya casi, dando la impresión de gran precisión en la estimación ignorando el sesgo que introdujimos.(Goeman et al. 2018)[^6]
+
+Teniendo en cuenta esta limitación a la hora de interpretar los resultados pasamos al cálculo de los desvíos estándar. El paquete *glmnet* no tiene una función que devuelva los desvíos, posiblemente para evitar que se reporten sin recaudos. La manera de calcularos es, de manera resumida: (Van Wieringen 2019)[^7]
+
+$$Var[\hat \beta(\lambda)] = \sigma^2((X^TX + \lambda I_{nxn}))^{-1}X^TX[(X^TX + \lambda I_{nxn})^{-1}]^T$$
+
+Donde $\sigma^2$ es el error del modelo, X es la matriz de variables independientes de dimensión nxp, $\lambda$ es el peso de la penalización e I es la matriz identidad de dimensión nxn.
+
+Dado que nuestro modelo es sobre una muestra de la población utilizaremos una estimación $\hat \sigma^2$. Implementamos en R la función para calcular los desvíos estándar de nuestros coeficientes y actualizamos el ranking de los primeros diez jugadores con esta nueva información.
+
+```{r player_ranking_sd}
+player_ranking = readRDS("output/tables/player_ranking.rds")
+knitr::kable(head(player_ranking,20))
+```
+
+A primera vista ya vemos que los desvíos estándar se sitúan alrededor de entre 2.5 y 3.5 puntos por cada 100 posesiones, mientras que el jugador con el mayor coeficiente aporta en promedio 2.17 puntos cada 100 posesiones. Esto indicaría que en realidad no podemos establecer diferencias reales entre estos jugadores.
+Los coeficientes están sesgados pero mantienen la propiedad de ser variables normales por lo que podemos aplicar los mismos tests que en una regresión lineal multivariada clásica.
+
+```{r}
+# t-test a una cola
+# Jugador rankeado 1
+tscore_1 = (player_ranking$coef[1] - 0)/player_ranking$sd[1]
+pvalue_1 = 1 - pt(q = tscore_1, df = 16774)
+# Jugador rankeado 20
+tscore_20 = (player_ranking$coef[20] - 0)/player_ranking$sd[20]
+pvalue_20 = 1 - pt(q = tscore_20, df = 16774)
+
+```
+
+Realizando el test t para ver diferencias estadísticamente significativas respecto a 0 de los coeficientes podemos ver que tanto el jugador rankeado número uno "`r player_ranking$player.lastName[1]`" como el jugador rankeado número veinte "`r player_ranking$player.lastName[20]`" tienen p-valores de `r pvalue_1`y `r pvalue_20`respectivamente, no encontrando evidencia suficiente para decir que tienen impacto positivo en los puntos de su equipo. Más allá de las limitaciones de nuestros estimadores, no poder asegurar estadísticamente que el jugador mejor rankeado aporta positivamente a su equipo parece un obstáculo importante.
+
+AGREGAR TEST DE DIFERENCIA DE COEFICIENTES? BUSCAR LA MATRIZ DE COVARIANZAS DE LA FUNCION RIDGE_SE
 
 
 Por otra parte luego sumamos los coeficientes de cada jugador por equipo y armamos un ranking de equipos conformado por esta agregación. Nuevamente los resultados son bastante creíbles, particularmente en la parte alta de la tabla donde los equipos que más ganaron en la temporada regular figuran en los primeros puestos. Hay alguna situación excepcional como Washington que figura ante último y se clasificó a la instancia de playoffs (posterior a la temporada regular) y por lo tanto su posición en la tabla no condice con su resultado real. Ver tabla \ref{tab:team_ranking}.
@@ -181,5 +218,9 @@ Más allá de lo consguido hasta el momento quedan ciertas tareas pendientes:
 [^1]: https://squared2020.com/2017/09/18/deep-dive-on-regularized-adjusted-plus-minus-i-introductory-example/
 [^2]: http://www.sloansportsconference.com/wp-content/uploads/2015/09/joeSillSloanSportsPaperWithLogo.pdf
 [^3]: https://www.mysportsfeeds.com/data-feeds/api-docs
-[^4]: R Core Team (2013). R: A language and environment for statisticalcomputing. R Foundation for Statistical Computing, Vienna, Austria. URL http://www.R-project.org/.
+[^4]: R Core Team (2013). R: A language and environment for statisticalcomputing. R Foundation for Statistical Computing, Vienna, Austria. URL http://www.R-project.org/
+[^5]: Jerome Friedman, Trevor Hastie, Robert Tibshirani (2010). Regularization Paths for Generalized Linear Models via Coordinate Descent. Journal of Statistical Software, 33(1), 1-22. URL http://www.jstatsoft.org/v33/i01/. 
+[^6]: Jelle Goeman, Rosa Meijer, Nimisha Chaturvedi (2018). L1 and L2 Penalized Regression Models. https://cran.r-project.org/web/packages/penalized/vignettes/penalized.pdf
+[^7]: Wessel N. van Wieringen (2019). Lecture notes on ridge regression. https://arxiv.org/pdf/1509.09169;Lecture
+
   
