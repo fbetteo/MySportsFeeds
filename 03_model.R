@@ -28,6 +28,7 @@ cv$lambda.min
 
 # Fit the final model on the training data
 model <- glmnet::glmnet(x, y, alpha = 0, lambda = cv$lambda.min, weights = matrix_model$amount_possessions, standardize = FALSE, intercept = FALSE)
+saveRDS(model, "data/working/model.RDS" )
 # Display regression coefficients
 coef(model)
 
@@ -45,6 +46,9 @@ data.frame(
 
 # Desvios estandar
 se_of_ridge = ridge_se(x,y,predictions,model) 
+
+var_cov_ridge  = ridge_var_cov(x,y,predictions,model)
+saveRDS(var_cov_ridge, "data/working/var_cov_ridge.RDS" )
 
 # Alpha = 0
 bb <- coef(model)@x %>% 
@@ -81,17 +85,21 @@ list2 <- lineups3 %>%
   
 
 
-cc <- bb %>%
+player_ranking <- bb %>%
   inner_join(., list2, by = "playerid") %>%
   select(playerid, player.firstName, player.lastName, team.abbreviation, coef, sd)
-saveRDS(cc, "output/tables/player_ranking.rds")
+saveRDS(player_ranking, "output/tables/player_ranking.rds")
 
-dd <- cc %>% group_by(team.abbreviation) %>%
-  summarise(coef_total =sum(coef)) %>%
+average_possessions = readRDS(here::here("data","working","average_possessions.rds")) %>%
+  mutate(player = as.integer(player))
+
+team_ranking <- player_ranking %>%
+  left_join(average_possessions ,by = c("playerid" = "player")) %>% 
+  mutate(coef_times_avg_poss = coef * average_pos) %>%
+  group_by(team.abbreviation) %>%
+  summarise(coef_total =sum(coef_times_avg_poss)) %>%
   arrange(coef_total)
-saveRDS(dd, "output/tables/team_ranking.rds")
+saveRDS(team_ranking, here::here("output/tables/team_ranking.rds"))
 
-### DA COMO EL ORTO
-## VER COMO SACAR LOS QUE JUEGAN MENOS DE X MINUTOS
 
-View(df_model[[1]])
+

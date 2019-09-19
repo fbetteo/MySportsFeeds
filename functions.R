@@ -73,6 +73,23 @@ API_request_lineup <- function(version = "2.0", league = "nba", season, feed, fo
   
 }
 
+# Version para lineu`p. No se como inputar la ruta de export en el here::here si lo paso como parametro.
+# Solo cambia el parametro "file" de saveRDS.
+
+
+API_request_playoff_lineup <- function(version = "2.0", league = "nba", season, feed, formato, output, ...){
+  
+  library(mysportsfeedsR)
+  authenticate_v2_x('4eec6849-46c9-43d2-9280-711e0c')
+  
+  output_file <- msf_get_results( version = version, league = league, season = season, feed = feed,
+                                  params = list(format = formato, ...))
+  
+  saveRDS(object = output_file, file = here::here("data","raw","playoff_lineup", paste0(output,".rds")))
+  
+  
+}
+
 
 ## Funcion para mergear stints ya consolidados con puntos generados en cada uno
 ## La idea es filtrar por cuarto y mergear las acciones cuyos momento en el tiempo condice con cada stint
@@ -132,4 +149,27 @@ ridge_se <- function(xs,y,yhat,my_mod){
   se_bs <- sqrt(diag(var_cov))
   print('NOTE: These standard errors are very biased.')
   return(se_bs)
+}
+
+
+
+## Funcion para calcular el SE de los coeficientes de Ridge pero devuelve la matriz de var-covar
+## Obtenida de https://www.reddit.com/r/statistics/comments/1vg8k0/standard_errors_in_glmnet/
+## Son SE sesgados. El modelo no tiene que tener intercepto
+
+ridge_var_cov <- function(xs,y,yhat,my_mod){
+  # Note, you can't estimate an intercept here
+  x2 <- as.matrix(xs)
+  n <- dim(x2)[1]
+  k <- dim(x2)[2]
+  sigma_sq <- sum((y-predictions)^2)/ (n-k)
+  lam <- model$lambda
+  if(is.null(model$lambda)==TRUE){lam <- 0}
+  i_lams <- matrix(diag(x=1,nrow=k,ncol=k))# ,sparse=TRUE)
+  xpx <- t(x2)%*%x2
+  xpxinvplam <- solve(xpx+lam*as.vector(i_lams))
+  var_cov <- sigma_sq * (xpxinvplam %*% xpx %*% xpxinvplam)
+  # se_bs <- sqrt(diag(var_cov))
+  # print('NOTE: These standard errors are very biased.')
+  return(var_cov)
 }

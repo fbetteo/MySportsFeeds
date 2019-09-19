@@ -36,6 +36,18 @@ for (i in 1:length(df_model)){
 
 # Removing PLayers that played too little.
  
+ # Amount of games played
+ 
+ games_played <- map(matrix_player_list_col, .f =  . %>% filter(included != 0) %>%
+                           mutate(played = 1) %>%
+                           group_by(player) %>%
+                           summarise(played_game = max(played)))
+ games_played_bind <- bind_rows(games_played) %>%
+   group_by(player) %>%
+   summarise(n_games = sum(played_game))
+ 
+ saveRDS(games_played_bind, here::here("data","working","games_played.rds"))
+ 
  # Possessions in court
  possessions_in_court_player <- map(matrix_player_list_col, .f =  . %>% filter(included != 0) %>%
                                 group_by(player) %>%
@@ -44,6 +56,17 @@ for (i in 1:length(df_model)){
    group_by(player) %>%
    summarise(n_possessions = sum(n_possessions))
                                 
+ saveRDS(possessions_in_court_player_bind, here::here("data","working","possessions_player.rds"))
+ 
+ 
+ # Average possessions per game
+ 
+ average_possessions = possessions_in_court_player_bind %>%
+   left_join(games_played_bind, by = "player") %>%
+   mutate(average_pos = n_possessions / n_games)
+ 
+ saveRDS(average_possessions, here::here("data","working","average_possessions.rds"))
+ 
 # Plot to see distribution and pick a threshold
 (g_pos <-  ggplot(data = possessions_in_court_player_bind) +
   geom_histogram(aes(x = n_possessions), binwidth = 130, color = "black", fill = "white"))

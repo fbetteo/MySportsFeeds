@@ -2,7 +2,10 @@
 title: "Trabajo Especializacion"
 author: "Franco Betteo"
 date: "01/09/2019"
-output: pdf_document
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -165,40 +168,129 @@ Donde $\sigma^2$ es el error del modelo, X es la matriz de variables independien
 Dado que nuestro modelo es sobre una muestra de la población utilizaremos una estimación $\hat \sigma^2$. Implementamos en R la función para calcular los desvíos estándar de nuestros coeficientes y actualizamos el ranking de los primeros diez jugadores con esta nueva información.
 
 ```{r player_ranking_sd}
+model = readRDS("data/working/model.rds")
 player_ranking = readRDS("output/tables/player_ranking.rds")
 knitr::kable(head(player_ranking,20))
 ```
 
-A primera vista ya vemos que los desvíos estándar se sitúan alrededor de entre 2.5 y 3.5 puntos por cada 100 posesiones, mientras que el jugador con el mayor coeficiente aporta en promedio 2.17 puntos cada 100 posesiones. Esto indicaría que en realidad no podemos establecer diferencias reales entre estos jugadores.
+A primera vista ya vemos que los desvíos estándar se sitúan alrededor de entre 2.5 y 3.5 puntos por cada 100 posesiones, mientras que el jugador con el mayor coeficiente aporta en promedio 2.17 puntos cada 100 posesiones.
 Los coeficientes están sesgados pero mantienen la propiedad de ser variables normales por lo que podemos aplicar los mismos tests que en una regresión lineal multivariada clásica.
 
-```{r}
+```{r t_test, echo=TRUE}
 # t-test a una cola
 # Jugador rankeado 1
+# Estan bien los DF?
 tscore_1 = (player_ranking$coef[1] - 0)/player_ranking$sd[1]
-pvalue_1 = 1 - pt(q = tscore_1, df = 16774)
+pvalue_1 = 1 - pt(q = tscore_1, df = model$nobs - model$df)
 # Jugador rankeado 20
+# Estan bien los DF?
 tscore_20 = (player_ranking$coef[20] - 0)/player_ranking$sd[20]
-pvalue_20 = 1 - pt(q = tscore_20, df = 16774)
+pvalue_20 = 1 - pt(q = tscore_20, df = model$nobs - model$df)
 
 ```
 
 Realizando el test t para ver diferencias estadísticamente significativas respecto a 0 de los coeficientes podemos ver que tanto el jugador rankeado número uno "`r player_ranking$player.lastName[1]`" como el jugador rankeado número veinte "`r player_ranking$player.lastName[20]`" tienen p-valores de `r pvalue_1`y `r pvalue_20`respectivamente, no encontrando evidencia suficiente para decir que tienen impacto positivo en los puntos de su equipo. Más allá de las limitaciones de nuestros estimadores, no poder asegurar estadísticamente que el jugador mejor rankeado aporta positivamente a su equipo parece un obstáculo importante.
 
-AGREGAR TEST DE DIFERENCIA DE COEFICIENTES? BUSCAR LA MATRIZ DE COVARIANZAS DE LA FUNCION RIDGE_SE
+```{r wald_test, echo=TRUE}
+var_cov_ridge = readRDS("data/working/var_cov_ridge.RDS")
+# Wald test. Coefficients differences.
+# Estan bien los DF?
+# Manually 1 vs 405
+wald_1_20_init = player_ranking$coef[1] - player_ranking$coef[405]
+
+sd_1_20 = sqrt(var_cov_ridge[paste0("x",player_ranking$playerid[1]),
+              paste0("x",player_ranking$playerid[1])]+
+              var_cov_ridge[paste0("x",player_ranking$playerid[405]),
+              paste0("x",player_ranking$playerid[405])] - 
+              2*var_cov_ridge[paste0("x",player_ranking$playerid[1]),
+              paste0("x",player_ranking$playerid[405])])
+
+wald_1_20_t = wald_1_20_init / sd_1_20
+pvalue_1_20 = 1 - pt(q = wald_1_20_t, df = model$nobs - model$df)
+
+```
+
+Yendo más allá, proponemos un test de Wald para comparar los coeficientes del rankeado número 1 contra el rankeado en la última posición. La hipótesis nula es que ambos coeficientes son iguales. El test de Wald se basa en que la variable aleatoria generada por la resta de ambos coeficientes sea igual a 0 en la hipótesis nula. Se la divide por su desvío estándar generando un estadístcio con distribución T de Student y luego se compara con las regiones críticas. En este caso el p-valor es de `r pvalue_1_20`, lo cual nos dice que de ser cierta la hipótesis nula encontrar un valor al menos tan extremo como este para el estadístico tiene `r pvalue_1_20` de probabilidad. Ni con un umbral de 0.1 podemos rechazar la hipótesis nula y podemos decir que no hay evidencia estadística para diferenciar al primero del últiom jugador del ranking por sus coeficientes.  
+Al margen de lo ya aclarado de que los desvíos estándar están sesgados, resultados como estos no parecen darle demasiada entidad al modelo. Pareciera que la reducción de la varianza mediante la regresión Ridge, tal como se hizo el experimento, no alcanza para generar coeficientes estables.
+
+```{r coef_modelo}
+# df = data.frame(player = c(player_ranking$player.lastName[1],player_ranking$player.lastName[405]),
+#                  coef   = c(player_ranking$coef[1],player_ranking$coef[405]),
+#                  sd     = c(sqrt(var_cov_ridge[paste0("x",player_ranking$playerid[1]),
+#                                 paste0("x",player_ranking$playerid[1])]),
+#                             sqrt(var_cov_ridge[paste0("x",player_ranking$playerid[405]),
+#                             paste0("x",player_ranking$playerid[405])])))
+# 
+# x1 = (df$coef[1]-3*df$sd[1]):(df$coef[1]+3*df$sd[1]) 
+# x2 = (df$coef[2]-3*df$sd[2]):(df$coef[2]+3*df$sd[2]) 
+# player1 = dnorm(x1,df$coef[1], df$sd[1])
+# player2 = dnorm(x2,df$coef[2], df$sd[2])
 
 
-Por otra parte luego sumamos los coeficientes de cada jugador por equipo y armamos un ranking de equipos conformado por esta agregación. Nuevamente los resultados son bastante creíbles, particularmente en la parte alta de la tabla donde los equipos que más ganaron en la temporada regular figuran en los primeros puestos. Hay alguna situación excepcional como Washington que figura ante último y se clasificó a la instancia de playoffs (posterior a la temporada regular) y por lo tanto su posición en la tabla no condice con su resultado real. Ver tabla \ref{tab:team_ranking}.
+ggplot(data = player_ranking, aes( x = reorder(playerid, coef), y = coef )) + 
+  geom_bar(stat = "identity", fill = "lightblue") +
+  theme(axis.text.y = element_blank(),
+  axis.ticks.y =  element_blank()) + 
+  labs(x = "",
+       y = "Coeficientes Ridge",
+       title = "Resultados del modelo") + 
+  coord_flip()
+  
+  
+
+```
+
+
+A pesar de los resultados del test que le quitan importancia a los coeficientes podemos darnos cuenta que aunque sea direccionalmente no es totalmente descabellado (aunque no sirva para obtener conclusiones). Los jugadores de los primeros puestos del ranking son en gran parte de elite y no sorprende verlos allí. De la misma manera, en la parte baja de la tabla vemos jugadores poco participativos de equipos que obtuvieron buenos resultados en la temporada y principalmente jugadores de equipos que han tenido una campaña pobre (Fig \ref{tab:ranking_bajo}.)
+
+```{r ranking_bajo}
+knitr::kable(tail(player_ranking,20))
+```
+
+
+
+Dicho esto podemos ir un paso más allá en el análisis y proponer un ranking de equipos basado en la suma de los coeficientes obtenidos para los jugadores que los componen multiplicado por el promedio de posesiones por partido de cada jugador.
+$$ ValorEquipo_i = \sum_{j=1}^n{Coef_{ji}}*AvgPos_{ji}$$
+Donde j es cada jugador del equipo i.
+
+
+Nuevamente los resultados son bastante creíbles, particularmente en la parte alta de la tabla donde los equipos que más ganaron en la temporada regular figuran en los primeros puestos. En la NBA los mejores 8 equipos de cada conferencia (este y oeste) clasifican a playoffs. De esos 16 equipos, 14 figuran en los primeros 16 puestos del ranking propuesto en este trabajo. Las únicas diferencias es que Denver y Detroit figuran entre los 16 primeros en nuestro ranking y Cleveland y Milwaukee no. Lo curioso es que Denver en realidad tuvo más victorias que Milwaukee pero quedo noveno en su conferencia, es decir que la diferencia entre ambas tablas es muy fina en términos de quienes clasifican a la instancia de eliminiación directa.
+Por otra parte, Cleveland que en nuestro ranking queda fuera de los primeros ocho del este, en la realidad salió cuarto de su conferencia, dando lugar a una diferencia significativa entre su ranking y su posición en la tabla.
+Ver tablas \ref{tab:team_ranking} y \ref{tab:standing_2017_2018}.
+No es menor que el ranking se armó usando los partidos que dieron lugar a los resultados de la temporada regular y por lo tanto es como comparar con el set de entrenamiento, sin embargo lo destacable es que el ranking se arma a partir de la suma de coeficientes de los distintos jugadores y no mirando a los equipos directamente.
 
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
 team_ranking = readRDS("output/tables/team_ranking.rds") %>%
   arrange(desc(coef_total))
 ```
-```{r team_ranking}
+```{r tail_ranking}
 knitr::kable(team_ranking, caption = "Ranking de Equipos")
 ```
 
+```{r standing_2017_2018}
+standing = readRDS("data/raw/standing.rds")
+knitr::kable(standing %>% select(abbreviation, Team, W, L, WL), caption = "Equipos ordenados según cantidad de victorias")
+```
+
+
+
+Lo siguiente que vamos a analizar es cómo performa este ranking construido en la siguiente ronda de la competencia, los playoffs. Los partidos de esa instancia no se usaron para el entrenamiento del modelo.
+
+El enfoque será el más simple posible y consiste en declarar como favorito al equipo cuyo score sea mayor en el cruce, es decir cuya suma de coeficientes individuales de la regresión sea máximo.
+$$ \begin{cases}
+Gana_A &\text{ si ValorEquipo_A > ValorEquipo_B} \\
+Gana_B &\text{ si ValorEquipo_B > ValorEquipo_A}
+\end{cases}$$
+
+En primer lugar obviamente
+
+
+### DUDAS. 1) Estan bien los tests aplicados sobre los coeficientes? que otra cosa se podria hacer?
+###        2) Para armar ranking de equipos, está bien sumar coeficientes? Como incluyo la información del SD?  
+           3) De la misma indole, para comparar quien gana, se puede asignar probabilidades usando algo de los SD?
+           
+#### FALTA COMPARAR EN ALGUN MOMENTO CONTRA OTRO RANKING !!! EN LA TABLA STANDING ESTA EL DE BASKETKALL REFERENCE (SRS) 
 
 
 ### Observaciones temporales
