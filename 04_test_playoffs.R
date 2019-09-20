@@ -46,6 +46,9 @@ lineups3 <- map2(.x = lineups2, .y = away_teams, .f = left_join, by = "team.id")
 
 player_ranking_list = list(player_ranking)
 
+average_possessions = readRDS(here::here("data","working","average_possessions.rds")) %>%
+  mutate(player = as.integer(player))
+
 playoff_games = map2(.x = lineups3, .y = player_ranking_list, .f = left_join, by = c("player.id" = "playerid")) %>%
   map(., .f = ~ .x %>% 
         left_join(average_possessions ,by = c("player.id" = "player")) %>% 
