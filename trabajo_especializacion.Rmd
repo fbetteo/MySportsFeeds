@@ -277,13 +277,42 @@ knitr::kable(standing %>% select(abbreviation, Team, W, L, WL), caption = "Equip
 
 Lo siguiente que vamos a analizar es cómo performa este ranking construido en la siguiente ronda de la competencia, los playoffs. Los partidos de esa instancia no se usaron para el entrenamiento del modelo.
 
-El enfoque será el más simple posible y consiste en declarar como favorito al equipo cuyo score sea mayor en el cruce, es decir cuya suma de coeficientes individuales de la regresión sea máximo.
+El enfoque será el más simple posible y consiste en declarar como favorito para cada partido al equipo cuyo score sea mayor en el cruce, teniendo en cuenta los jugadores en el plantel para cada enfrentamiento, contemplando posibles lesiones, sanciones ,etc. Es decir que para cada partido se recalcula el score como la suma ponderada de coeficientes por posesiones promedio de cada jugador y se compara con el score del advsersario.
 $$ \begin{cases}
 Gana_A &\text{ si ValorEquipo_A > ValorEquipo_B} \\
 Gana_B &\text{ si ValorEquipo_B > ValorEquipo_A}
 \end{cases}$$
 
-En primer lugar obviamente
+```{r}
+playoff_test = readRDS("data/working/playoff_test.rds") 
+
+df_score = playoff_test %>%
+  select(team = away_team_ranking, score = away_ranking_score) %>%
+  rbind.data.frame(data.frame( team = playoff_test$home_team_ranking, score = playoff_test$home_ranking_score)) 
+
+team_avg_score = df_score %>%
+  group_by(team) %>%
+  summarise(avg_score = mean(score))
+
+df_score_expanded = df_score %>%
+  left_join(team_avg_score, by = "team") %>%
+  mutate(team = fct_reorder(team, -avg_score))
+
+# 
+theme_set(theme_bw())
+ggplot(data = df_score_expanded, aes( x = team, y = score, color = team)) + 
+  # geom_boxplot(outlier.shape = NA) + 
+   geom_jitter(size = 2, alpha = 0.25, width = 0.2) +
+    stat_summary(fun.y = mean, geom = "point", size = 5) +
+   scale_y_continuous(limits = c(0, 900)) +
+   labs(x = NULL, y = "Ridge Score") +
+  theme(legend.position = "none",
+        axis.title = element_text(size = 12),
+        axis.text.x = element_text(size = 10),
+        panel.grid = element_blank())
+
+```
+
 
 
 ### DUDAS. 1) Estan bien los tests aplicados sobre los coeficientes? que otra cosa se podria hacer?
