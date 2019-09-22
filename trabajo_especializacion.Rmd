@@ -275,15 +275,34 @@ knitr::kable(standing %>% select(abbreviation, Team, W, L, WL), caption = "Equip
 
 
 
-Lo siguiente que vamos a analizar es cómo performa este ranking construido en la siguiente ronda de la competencia, los playoffs. Los partidos de esa instancia no se usaron para el entrenamiento del modelo.
+Lo siguiente que vamos a analizar es cómo performa este ranking construido en la siguiente ronda de la competencia: los playoffs. Los partidos de esa instancia no se usaron para el entrenamiento del modelo.
 
 El enfoque será el más simple posible y consiste en declarar como favorito para cada partido al equipo cuyo score sea mayor en el cruce, teniendo en cuenta los jugadores en el plantel para cada enfrentamiento, contemplando posibles lesiones, sanciones ,etc. Es decir que para cada partido se recalcula el score como la suma ponderada de coeficientes por posesiones promedio de cada jugador y se compara con el score del advsersario.
-$$ \begin{cases}
-Gana_A &\text{ si ValorEquipo_A > ValorEquipo_B} \\
-Gana_B &\text{ si ValorEquipo_B > ValorEquipo_A}
-\end{cases}$$
+$$
+\begin{cases}
+Gana_A &\text{si } ValorEquipo_A \text{ > }  ValorEquipo_B \\
+Gana_B &\text{si } ValorEquipo_B \text{ > } ValorEquipo_A
+\end{cases}
+$$
 
-```{r}
+En \ref{fig:score_plot} podemos ver que los scores por equipo no varían demasiado salvo algunas excepciones, lo cual tiene sentido ya que los jugadores tienen un coeficiente fijo y quienes forman parte del partido no suele cambiar tan frecuentemente. Generalmente se debe a lesiones o imprevistos. Dicho esto, es de esperar que si comparamos scores de dos equipos para cierta cantidad de partidos mayor a uno, salvo que sean muy parejos, sea siempre el mismo el que tenga un score mayor.
+En los playoffs, los cruces son al mejor de siete partidos, es decir que aquel que logra ganar cuatro partidos pasa a la siguiente ronda y el otro queda eliminado.
+Dado lo simple del modelo propuesto, donde no se toma en cuenta ningún otro factor más que el score podemos ver cómo performa a un nivel agregado, es decir, no mirando partido a partido (donde cómo dijimos en la gran mayoría de los casos se va a predecir siempre al mismo ganador) si no a nivel cruce, donde se predice que el equipo que ganará la serie será aquel que tenga mayor score en mayor cantidad de partidos del cruce. Luego se compara esa predicción con el equipo que realmente pasó de ronda.
+
+
+```{r fit_table}
+fit_table_export = readRDS(file = "output/tables/fit_table_export.rds")
+knitr::kable(fit_table_export, caption = "Predicción del ganador de la serie basado en score") 
+```
+```{r contingency}
+knitr::kable(table(fit_table_export$fit))
+```
+
+Vemos en \ref{tab:fit_table} que utilizando los scores basados en el modelo Ridge se pudieron predecir correctamente 11 de los 15 cruces de los playoffs de la temporada 2017-2018. Vemos que la principal falencia se da con Cleveland, donde al tener un score tan bajo dados los coeficientes lo pronosticaba perdedor en todas las instancias cuando finalmente llegó a la final. Está claramente relacionado a lo mencionado anteriormente, que Cleveland quedaba fuera de los 16 primeros puestos según nuestro ranking cuando en realidad clasificó en cuarto lugar en su conferencia.
+
+
+
+```{r score_plot}
 playoff_test = readRDS("data/working/playoff_test.rds") 
 
 df_score = playoff_test %>%
@@ -316,7 +335,7 @@ ggplot(data = df_score_expanded, aes( x = team, y = score, color = team)) +
 
 
 ### DUDAS. 1) Estan bien los tests aplicados sobre los coeficientes? que otra cosa se podria hacer?
-###        2) Para armar ranking de equipos, está bien sumar coeficientes? Como incluyo la información del SD?  
+###        2) Para armar ranking de equipos, está bien sumar coeficientes ponderados? Como incluyo la información                del SD?  
            3) De la misma indole, para comparar quien gana, se puede asignar probabilidades usando algo de los SD?
            
 #### FALTA COMPARAR EN ALGUN MOMENTO CONTRA OTRO RANKING !!! EN LA TABLA STANDING ESTA EL DE BASKETKALL REFERENCE (SRS) 

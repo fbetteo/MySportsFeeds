@@ -20,11 +20,18 @@ predicted_winner = playoff_test %>%
   filter(avanza == max(avanza)) %>%
   select(-avanza)
 
-fit_table = aa %>%
-  left_join(bb, by = "id") %>%
-  mutate(fit = ifelse(winner == predicted, 1, 0))
+fit_table = actual_winner %>%
+  left_join(predicted_winner, by = "id") %>%
+  mutate(fit = ifelse(winner == predicted, 1, 0)) %>%
+  mutate(team1 = str_sub(id,1,3),
+         team2 = str_sub(id, 4, 6)) 
+
+fit_table_export = fit_table %>%
+  ungroup() %>%
+  select(team1, team2, winner, predicted, fit)
 
 
 table(fit_table$fit)
 
 saveRDS(fit_table, "output/tables/fit_table.rds")
+saveRDS(fit_table_export, "output/tables/fit_table_export.rds")

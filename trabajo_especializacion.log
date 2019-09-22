@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (MiKTeX 2.9.6350 64-bit) (preloaded format=pdflatex 2017.10.27)  14 SEP 2019 18:35
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (MiKTeX 2.9.6350 64-bit) (preloaded format=pdflatex 2017.10.27)  22 SEP 2019 18:56
 entering extended mode
 **./trabajo_especializacion.tex
 (trabajo_especializacion.tex
@@ -1124,7 +1124,7 @@ File: ts1lmr.fd 2009/10/30 v1.6 Font defs for Latin Modern
 ) [1
 
 {C:/ProgramData/MiKTeX/2.9/pdftex/config/pdftex.map}] [2]
-<trabajo_especializacion_files/figure-latex/unnamed-chunk-1-1.pdf, id=50, 469.7
+<trabajo_especializacion_files/figure-latex/unnamed-chunk-1-1.pdf, id=58, 469.7
 55pt x 325.215pt>
 File: trabajo_especializacion_files/figure-latex/unnamed-chunk-1-1.pdf Graphic 
 file (type pdf)
@@ -1138,7 +1138,7 @@ LaTeX Font Info:    Try loading font information for T1+lmtt on input line 380.
 (D:\Programas\MiKTeX\tex\latex\lm\t1lmtt.fd
 File: t1lmtt.fd 2009/10/30 v1.6 Font defs for Latin Modern
 )
-<trabajo_especializacion_files/figure-latex/unnamed-chunk-2-1.pdf, id=58, 469.7
+<trabajo_especializacion_files/figure-latex/unnamed-chunk-2-1.pdf, id=66, 469.7
 55pt x 325.215pt>
 File: trabajo_especializacion_files/figure-latex/unnamed-chunk-2-1.pdf Graphic 
 file (type pdf)
@@ -1179,7 +1179,7 @@ Package xcolor Warning: Incompatible color definition on input line 593.
 Package xcolor Warning: Incompatible color definition on input line 593.
 
 
-<trabajo_especializacion_files/figure-latex/coef_modelo-1.pdf, id=100, 469.755p
+<trabajo_especializacion_files/figure-latex/coef_modelo-1.pdf, id=108, 469.755p
 t x 325.215pt>
 File: trabajo_especializacion_files/figure-latex/coef_modelo-1.pdf Graphic file
  (type pdf)
@@ -1187,32 +1187,76 @@ File: trabajo_especializacion_files/figure-latex/coef_modelo-1.pdf Graphic file
 Package pdftex.def Info: trabajo_especializacion_files/figure-latex/coef_modelo
 -1.pdf used on input line 614.
 (pdftex.def)             Requested size: 469.75386pt x 325.2142pt.
+
+LaTeX Warning: Reference `tab:ranking_bajo' on page 8 undefined on input line 6
+23.
+
 [8 <./trabajo_especializacion_files/figure-latex/coef_modelo-1.pdf>]
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 729.
-[9pdfTeX warning (ext4): destination with the same identifier (name{table.1}) h
-as been already used, duplicate ignored
+
+LaTeX Warning: Reference `tab:team_ranking' on page 9 undefined on input line 6
+91.
+
+
+LaTeX Warning: Reference `fig:score_plot' on page 9 undefined on input line 858
+.
+
+[9] [10pdfTeX warning (ext4): destination with the same identifier (name{table.
+1}) has been already used, duplicate ignored
 
 \AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
                                                   \fi \fi 
-l.729 \end{document}
-                    ]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 729.
+l.937 \begin{verbatim}
+                      ]
+<trabajo_especializacion_files/figure-latex/score_plot-1.pdf, id=131, 469.755pt
+ x 325.215pt>
+File: trabajo_especializacion_files/figure-latex/score_plot-1.pdf Graphic file 
+(type pdf)
+<use trabajo_especializacion_files/figure-latex/score_plot-1.pdf>
+Package pdftex.def Info: trabajo_especializacion_files/figure-latex/score_plot-
+1.pdf used on input line 945.
+(pdftex.def)             Requested size: 469.75386pt x 325.2142pt.
+[11pdfTeX warning (ext4): destination with the same identifier (name{table.2}) 
+has been already used, duplicate ignored
+
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.950 ...ficientes-que-otra-cosa-se-podria-hacer}}
+                                                  ]
+Overfull \hbox (107.7433pt too wide) in paragraph at lines 960--960
+[]       \T1/lmtt/m/n/10 3) De la misma indole, para comparar quien gana, se pu
+ede asignar probabilidades usando algo de los SD?[] 
+ []
+
+[12pdfTeX warning (ext4): destination with the same identifier (name{table.3}) 
+has been already used, duplicate ignored
+
+\AtBegShi@Output ...ipout \box \AtBeginShipoutBox 
+                                                  \fi \fi 
+l.960 \end{verbatim}
+                     <./trabajo_especializacion_files/figure-latex/score_plot-1
+.pdf>]
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 996.
+[13]
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 996.
 (trabajo_especializacion.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 729.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 729.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 996.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 996.
 Package rerunfilecheck Info: File `trabajo_especializacion.out' has not changed
 .
-(rerunfilecheck)             Checksum: 079AB4D7FF575A1D6A380858C4F9E308;168.
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 729.
+(rerunfilecheck)             Checksum: 3DC877C27CB3D0C22D7BC1D08CF1CD52;1388.
+
+LaTeX Warning: There were undefined references.
+
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 996.
  ) 
 Here is how much of TeX's memory you used:
- 14858 strings out of 493323
- 211284 string characters out of 3142536
- 338192 words of memory out of 3000000
- 18014 multiletter control sequences out of 15000+200000
- 62648 words of font info for 102 fonts, out of 3000000 for 9000
+ 14891 strings out of 493323
+ 212424 string characters out of 3142536
+ 349706 words of memory out of 3000000
+ 18027 multiletter control sequences out of 15000+200000
+ 63063 words of font info for 107 fonts, out of 3000000 for 9000
  1141 hyphenation exceptions out of 8191
- 34i,9n,38p,447b,381s stack positions out of 5000i,500n,10000p,200000b,50000s
+ 34i,10n,38p,712b,463s stack positions out of 5000i,500n,10000p,200000b,50000s
 {D:/Programas/MiKTeX/fonts/enc/dvips/lm/lm-ec.enc}{D:/Programas/MiKTeX/fonts/
 enc/dvips/lm/lm-mathsy.enc}{D:/Programas/MiKTeX/fonts/enc/dvips/lm/lm-rm.enc}{D
 :/Programas/MiKTeX/fonts/enc/dvips/lm/lm-mathex.enc}{D:/Programas/MiKTeX/fonts/
@@ -1228,9 +1272,9 @@ nts/type1/public/lm/lmri12.pfb><D:/Programas/MiKTeX/fonts/type1/public/lm/lmsy1
 0.pfb><D:/Programas/MiKTeX/fonts/type1/public/lm/lmsy7.pfb><D:/Programas/MiKTeX
 /fonts/type1/public/lm/lmtk10.pfb><D:/Programas/MiKTeX/fonts/type1/public/lm/lm
 tt10.pfb><D:/Programas/MiKTeX/fonts/type1/public/lm/lmtti10.pfb>
-Output written on trabajo_especializacion.pdf (9 pages, 345558 bytes).
+Output written on trabajo_especializacion.pdf (13 pages, 386939 bytes).
 PDF statistics:
- 187 PDF objects out of 1000 (max. 8388607)
- 32 named destinations out of 1000 (max. 500000)
- 14360 words of extra memory for PDF output out of 14400 (max. 10000000)
+ 230 PDF objects out of 1000 (max. 8388607)
+ 42 named destinations out of 1000 (max. 500000)
+ 14381 words of extra memory for PDF output out of 14400 (max. 10000000)
 
