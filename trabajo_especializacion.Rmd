@@ -3,9 +3,9 @@ title: "Trabajo Especializacion"
 author: "Franco Betteo"
 date: "01/09/2019"
 output:
-  pdf_document: default
-  html_document:
-    df_print: paged
+  bookdown::pdf_document2:
+    fig_caption: yes
+    number_sections: no
 ---
 
 ```{r setup, include=FALSE}
@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 
 ```{r library}
 library(tidyverse)
+library(kableExtra)
 ```
 
 #### Introducción
@@ -34,8 +35,14 @@ Esta tabla esta conformada con todos los equipos de la liga y para cada partido 
 
 
 Tanto para la consulta de la API como para el manejo y procesamiento de los datos se utilizó el lenguaje R [^4]
+Ver Tabla \ref{tab:matrixmodel}
 
-INCLUIR HEAD DE LA TABLA O MANDAR A APENDICE
+```{r matrixmodel}
+matrixmodel = readRDS("data/working/matrix_model.rds")
+knitr::kable(head(matrixmodel[,1:10], 20), caption ="matrixmodel")
+rm(matrixmodel)
+```
+
 
 #### Modelo
 
@@ -149,7 +156,7 @@ Tomando este valor de $\lambda$, lo siguiente es correr el modelo Ridge con todo
 A continuación mostramos los primeros diez jugadores según el coeficiente obtenido (de mayor a menor), donde un coeficiente más elevado está asociado a mayor diferencial de puntos a favor mientras se está en cancha, controlando por el resto de los jugadores presentes (compañeros como oponentes).
 
 ```{r player_ranking}
-library(kableExtra)
+
 player_ranking = readRDS("output/tables/player_ranking.rds")
 knitr::kable(head(player_ranking %>% select(-sd),10))
 ```
@@ -242,10 +249,10 @@ ggplot(data = player_ranking, aes( x = reorder(playerid, coef), y = coef )) +
 ```
 
 
-A pesar de los resultados del test que le quitan importancia a los coeficientes podemos darnos cuenta que aunque sea direccionalmente no es totalmente descabellado (aunque no sirva para obtener conclusiones sólidas). Los jugadores de los primeros puestos del ranking son en gran parte de elite y no sorprende verlos allí. De la misma manera, en la parte baja de la tabla vemos jugadores poco participativos de equipos que obtuvieron buenos resultados en la temporada y principalmente jugadores de equipos que han tenido una campaña pobre (Fig \ref{tab:rankingbajo})
+A pesar de los resultados del test que le quitan importancia a los coeficientes podemos darnos cuenta que aunque sea direccionalmente no es totalmente descabellado (aunque no sirva para obtener conclusiones sólidas). Los jugadores de los primeros puestos del ranking son en gran parte de elite y no sorprende verlos allí. De la misma manera, en la parte baja de la tabla vemos jugadores poco participativos de equipos que obtuvieron buenos resultados en la temporada y principalmente jugadores de equipos que han tenido una campaña pobre (Tabla \ref{tab:rankingbajo} )
 
 ```{r rankingbajo}
-knitr::kable(tail(player_ranking,20))
+knitr::kable(tail(player_ranking,20), caption = "Ultimos 20 jugadores")
 ```
 
 
@@ -285,8 +292,10 @@ Gana_A &\text{si } ValorEquipo_A \text{ > }  ValorEquipo_B \\
 Gana_B &\text{si } ValorEquipo_B \text{ > } ValorEquipo_A
 \end{cases}
 $$
-
-En la figura \ref{fig:scoreplot} podemos ver que los scores por equipo no varían demasiado salvo algunas excepciones, lo cual tiene sentido ya que los jugadores tienen un coeficiente fijo y quienes forman parte del partido no suele cambiar tan frecuentemente. Generalmente se debe a lesiones o imprevistos. Dicho esto, es de esperar que si comparamos scores de dos equipos para cierta cantidad de partidos mayor a uno, salvo que sean muy parejos, sea siempre el mismo el que tenga un score mayor.
+<!-- \@ref(fig: ..) y poner fig.cap en el chunk. Esto si referimos a un ggplot creado en el informe.
+  si usamos include_graphics() para llamar a jpgs creador por fuera podemos hacer \ref{fig:..} -->
+  
+En la figura \@ref(fig:scoreplot) podemos ver que los scores por equipo no varían demasiado salvo algunas excepciones, lo cual tiene sentido ya que los jugadores tienen un coeficiente fijo y quienes forman parte del partido no suele cambiar tan frecuentemente. Generalmente se debe a lesiones o imprevistos. Dicho esto, es de esperar que si comparamos scores de dos equipos para cierta cantidad de partidos mayor a uno, salvo que sean muy parejos, sea siempre el mismo el que tenga un score mayor.
 En los playoffs, los cruces son al mejor de siete partidos, por lo tanto aquel que logra ganar cuatro partidos pasa a la siguiente ronda y el otro queda eliminado.
 Dado lo simple del modelo propuesto, donde no se toma en cuenta ningún otro factor más que el score, podemos ver cómo performa a un nivel agregado, es decir, no mirando partido a partido, donde cómo dijimos en la gran mayoría de los casos se va a predecir siempre al mismo ganador, si no a nivel cruce, donde se predice que el equipo que ganará la serie será aquel que tenga mayor score en mayor cantidad de partidos del cruce. Luego se compara esa predicción con el equipo que realmente pasó de ronda.
 
@@ -300,10 +309,11 @@ knitr::kable(table(fit_table_export$fit))
 ```
 
 Vemos en \ref{tab:fittable} que utilizando los scores basados en el modelo Ridge se pudieron predecir correctamente 11 de los 15 cruces de los playoffs de la temporada 2017-2018. Vemos que la principal falencia se da con Cleveland, donde al tener un score tan bajo dados los coeficientes lo pronosticaba perdedor en todas las instancias cuando finalmente llegó a la final. Está claramente relacionado a lo mencionado anteriormente, que Cleveland quedaba fuera de los 16 primeros puestos según nuestro ranking cuando en realidad clasificó en cuarto lugar en su conferencia.
+A pesar de le gran varianza de los coeficientes de la regresión que da origen a este ranking y de lo simple del modelo para seleccionar ganadores los resultados no son decepcionantes por lo que aparentemente la regresión es atinada direccionalmente.
 
 
 
-```{r scoreplot}
+```{r scoreplot_df, warning=FALSE}
 playoff_test = readRDS("data/working/playoff_test.rds") 
 
 df_score = playoff_test %>%
@@ -318,9 +328,13 @@ df_score_expanded = df_score %>%
   left_join(team_avg_score, by = "team") %>%
   mutate(team = fct_reorder(team, -avg_score))
 
-# 
+#
+```
+
+
+```{r scoreplot, fig.cap=, warning=FALSE}
 theme_set(theme_bw())
-ggplot(data = df_score_expanded, aes( x = team, y = score, color = team)) + 
+(ggplot(data = df_score_expanded, aes( x = team, y = score, color = team)) + 
   # geom_boxplot(outlier.shape = NA) + 
    geom_jitter(size = 2, alpha = 0.25, width = 0.2) +
     stat_summary(fun.y = mean, geom = "point", size = 5) +
@@ -329,10 +343,11 @@ ggplot(data = df_score_expanded, aes( x = team, y = score, color = team)) +
   theme(legend.position = "none",
         axis.title = element_text(size = 12),
         axis.text.x = element_text(size = 10),
-        panel.grid = element_blank())
+        panel.grid = element_blank()))
 
 ```
 
+#### ESCRIBIR CONCLUSIONESSSS
 
 
 ### DUDAS. 1) Estan bien los tests aplicados sobre los coeficientes? que otra cosa se podria hacer?
