@@ -1,7 +1,7 @@
 ---
-title: "Impacto de los jugadores de la NBA según la métrica Plus Minus Ajustado"
-author: "Franco Betteo"
-date: "Septiembre de 2019"
+#title: "Impacto de los jugadores de la NBA según la métrica Plus Minus Ajustado"
+#author: "Franco Betteo"
+#date: "Septiembre de 2019"
 lang: es
 output:
   bookdown::pdf_document2:
@@ -24,13 +24,19 @@ library(tidyverse)
 library(kableExtra)
 ```
 
+
+## Resumen
+
+No hay una manera única e inequívoca de comparar rendimientos de jugadores en los distintos deportes y eso da lugar a discusiones sin fin. Este trabajo propone un ranking de jugadores de la NBA para la temporada 2017-2018 basado en una regresión Ridge controlando por los otros jugadores en cancha. Se analizan los resultados de este enfoque y se construye un ranking de equipos basado en ellos. Posteriormente se testea el ordenamiento de equipos en las fases definitorias de la temporada.
+
+
 ## Introducción
 
-No hay una manera única e inequívoca de comparar rendimientos de jugadores en los distintos deportes y eso da lugar a discusiones sin fin. Más díficil aún en los deportes en equipo donde hay roles diferentes y contribuciones de distinta índole. A raíz de esto se han ido desarrollando métricas que intentan resumir el aporte al equipo de manera integral para hacer comparables los jugadores. En básquetbol una de las medidas más conocidas de este tipo es el "plus-minus" (originalmente implementado en el hockey sobre hielo), que calcula la diferencia de puntos de un equipo mientras cada jugador estuvo en cancha. Es decir que valores positivos (negativos) revelan que durante un partido el equipo hizo más (menos) puntos de los que recibió mientras el jugador estuvo en cancha. Es una métrica sencilla de calcular y resume el aspecto más importante de un partido de manera general para cada jugador. Es fácil de interpretar pero no está exenta de problemas. La idea de este trabajo es aplicar un método más robusto, "Plus-Minus ajustado", basado en los aportes de Justin Jacobs[1] y Joseph Sill[2], donde el principal agregado es controlar por los otros jugadores en cancha. El objetivo es actualizar la métrica para la temporada 2017-2018 y generar un ranking de jugadores. Posteriormente generar un ranking de equipos, basado en los rankings individuales de jugadores, y comparar contra los resultados de las rondas definitorias del certamen cuyos datos no son utilizados para calcular la métrica.
+No hay una manera única e inequívoca de comparar rendimientos de jugadores en los distintos deportes y eso da lugar a discusiones sin fin. Más dífícil aún en los deportes en equipo donde hay roles diferentes y contribuciones de distinta índole. A raíz de esto se han ido desarrollando métricas que intentan resumir el aporte al equipo de manera integral para hacer comparables los jugadores. En básquetbol una de las medidas más conocidas de este tipo es el "plus-minus" (originalmente implementado en el hockey sobre hielo), que calcula la diferencia de puntos de un equipo mientras cada jugador estuvo en cancha. Es decir que valores positivos (negativos) revelan que durante un partido el equipo hizo más (menos) puntos de los que recibió mientras el jugador estuvo en cancha. Es una métrica sencilla de calcular y resume el aspecto más importante de un partido de manera general para cada jugador. Es fácil de interpretar pero no está exenta de problemas. La idea de este trabajo es aplicar un método más robusto, "Plus-Minus ajustado", basado en los aportes de Justin Jacobs[1] y Joseph Sill[2], donde el principal agregado es controlar por los otros jugadores en cancha. El objetivo es actualizar la métrica para la temporada 2017-2018 y generar un ranking de jugadores. Posteriormente generar un ranking de equipos, basado en los rankings individuales de jugadores, y comparar contra los resultados de las rondas definitorias del certamen cuyos datos no son utilizados para calcular la métrica.
 
 ## Datos
 
-Para poder calcular la métrica "plus minus ajustado" necesitamos tener, para cada momento del partido, los jugadores que hay en cancha y el resultado ya que el objetivo es ver la performance del equipo en presencia y ausencia de cada jugador de la liga. A tales fines se decidió utilizar la información provista por la API de MySportsFeed[3]. En ella podemos encontrar datos a un nivel suficientemente granular. En particular, para cada partido tenemos información jugada a jugada marcada por ciertas situaciones particulares, entre ellas tiros al aro y si se conviertieron puntos o no, rebotes, faltas y sustituciones. Con la primera y la última de estas características podemos recolectar los datos necesarios para generar nuestro dataset. Al estar todas las sustituciones y tener la alineación inicial de cada equipo podemos obtener todos los segmentos del partido donde hubo distintas combinaciones de jugadores en cancha (tanto compañeros como rivales) para cada jugador (denominados "stints" en la literatura). A su vez, al tener los puntos anotados podemos obtener el diferencial de puntos para cada uno de estos segmentos.  
+Para poder calcular la métrica "plus minus ajustado" necesitamos tener, para cada momento del partido, los jugadores que hay en cancha y el resultado ya que el objetivo es ver la performance del equipo en presencia y ausencia de cada jugador de la liga. A tales fines se decidió utilizar la información provista por la API de MySportsFeed[3]. En ella podemos encontrar datos a un nivel suficientemente granular. En particular, para cada partido tenemos información jugada a jugada marcada por ciertas situaciones particulares, entre ellas tiros al aro y si se convirtieron puntos o no, rebotes, faltas y sustituciones. Con la primera y la última de estas características podemos recolectar los datos necesarios para generar nuestro dataset. Al estar todas las sustituciones y tener la alineación inicial de cada equipo podemos obtener todos los segmentos del partido donde hubo distintas combinaciones de jugadores en cancha (tanto compañeros como rivales) para cada jugador (denominados "stints" en la literatura). A su vez, al tener los puntos anotados podemos obtener el diferencial de puntos para cada uno de estos segmentos.  
 
 A los fines de utilizar toda esta información para entrenar el modelo de "plus minus ajustado" necesitamos armar un dataset con el formato siguiente: 
 
@@ -38,7 +44,11 @@ A los fines de utilizar toda esta información para entrenar el modelo de "plus 
 * Las variables independientes son cada uno de los jugadores de la liga, con valor de 1 si estaban en cancha en ese segmento para el equipo local y -1 si estaban en cancha siendo del equipo visitante.
 * La variable dependiente es el diferencial de puntos del equipo local. Valores positivos (negativos) es que anotó más puntos el equipo local (visitante).
 
-Esta tabla esta conformada con todos los equipos de la liga y para cada partido de la temporada, de manera que para apendizar la información de cada encuentro hay que tener las variables independientes de cada equipo, es decir, todos sus jugadores. Dado que cada partido solo involucra a dos equipos, la gran mayoría de las columnas tendrán valor de 0 en cada observación, siendo el dataset una matriz dispersa (sparse matrix). Se toman valores de 1 y -1 según la localía para que el signo quede acorde a la medición del diferencial de puntos y por ende el signo de los coeficientes sea siempre positivo para aportes beneficiosos a un equipo y negativos para aportes perjudiciales.Ver Tabla \ref{tab:matrixmodel}
+Esta tabla esta conformada con todos los equipos de la liga y para cada partido de la temporada, de manera que para apendizar la información de cada encuentro hay que tener las variables independientes de cada equipo, es decir, todos sus jugadores. Dado que cada partido solo involucra a dos equipos, la gran mayoría de las columnas tendrán valor de 0 en cada observación, siendo el dataset una matriz dispersa (sparse matrix). Se toman valores de 1 y -1 según la localía para que el signo quede acorde a la medición del diferencial de puntos y por ende el signo de los coeficientes sea siempre positivo para aportes beneficiosos a un equipo y negativos para aportes perjudiciales. Ver Tabla \ref{tab:matrixmodel}
+
+El dataset conformado cuenta con información de la temporada regular de la NBA 2017/2018, cuyo inicio es el 17 de Octubre de 2017 y finaliza el 11 de Abril de 2018. En este período se disputaron 1230 partidos, resultado de un calendario que cuenta con 82 fechas donde participan 30 equipos en cada una. Ver Cuadro \ref{tab:standing20172018}.  
+Dividiendo los partidos en stints obtenemos 35551 observaciones. 
+A lo largo de estos 1230 partidos hubo incluidos oficialmente en las alineaciones 540 jugadores.
 
 
 Tanto para la consulta de la API como para el manejo y procesamiento de los datos se utilizó el lenguaje R [4]
@@ -47,7 +57,8 @@ Tanto para la consulta de la API como para el manejo y procesamiento de los dato
 ```{r matrixmodel}
 matrixmodel = readRDS("data/working/matrix_model.rds") %>%
   rename(n_possessoins = amount_possessions) %>%
-  select(-c(stint, diferential))
+  select(-c(stint, diferential)) %>%
+  rename(posesiones = n_possessoins,   dif_cada_100_posesiones = dif_per_100_possessions)
 knitr::kable(head(matrixmodel[,1:10], 20), caption ="Primeras 20 observaciones del dataset (solo un subset de 10 jugadores (variables independientes") %>%
   kable_styling(latex_options= c("HOLD_position", "scale_down", "striped"))
 rm(matrixmodel)
@@ -56,8 +67,8 @@ rm(matrixmodel)
 
 ## Modelo
 
-La metodología para calcular la métrica "plus minus ajustado" implica correr una regresión Ridge (regularización con *l2*) [5] donde la variable dependiente es el diferencial de puntos por segmento y las variables independientes son los jugadores en cancha. La idea de fondo es calcular el aporte de cada jugador al diferencial, controlando por sus compañeros y por los advsersarios. Se intenta eliminar el factor que sobreestima el aporte de algún jugador solo por el hecho de compartir tiempo en cancha con compañeros de primer nivel, que son los que generan realmente los diferenciales positivos. De la misma manera se intenta no sobreestimar a los jugadores que anotan muchos puntos contra equipos de baja performance o que solo juegan en los minutos llamados "basura" que corresponden a los minutos finales de un partido cuando ya está todo definido y suelen haber jugadores de menor nivel. 
-Dado que es una regresión lineal los coeficientes pueden interpretarse como un proxy del aporte neto de cada jugador, ya descontados los aportes del resto. Dada la codificación de variables - positiva para el local y negativa para visitantes -  todo signo positivo de un coeficiente es aporte real en puntos y negativo es tendencia a recibir más puntos que los que se convierten con el jugador en cancha.  
+La metodología para calcular la métrica "plus minus ajustado" implica correr una regresión Ridge (regularización con *l2*) [5] donde la variable dependiente es el diferencial de puntos por segmento y las variables independientes son los jugadores en cancha. La idea de fondo es calcular el aporte de cada jugador al diferencial, controlando por sus compañeros y por los adversarios. Se intenta eliminar el factor que sobreestima el aporte de algún jugador solo por el hecho de compartir tiempo en cancha con compañeros de primer nivel, que son los que generan realmente los diferenciales positivos. De la misma manera se intenta no sobreestimar a los jugadores que anotan muchos puntos contra equipos de baja performance o que solo juegan en los minutos llamados "basura" que corresponden a los minutos finales de un partido cuando ya está todo definido y suelen haber jugadores de menor nivel. 
+Dado que es una regresión lineal los coeficientes pueden interpretarse como un proxy del aporte neto de cada jugador, ya descontados los aportes del resto. Dada la codificación de variables - positiva para el local y negativa para visitantes - todo signo positivo de un coeficiente es aporte real en puntos y negativo es tendencia a recibir más puntos que los que se convierten con el jugador en cancha.  
 Los equipos suelen tener una plantilla de alrededor de 10 jugadores activos y los que más minutos disputan suelen ser menos aún por lo tanto es de esperar que haya una gran correlación entre los jugadores de cada equipo. Este es el principal motivo por el que se decide ir por una regresión regularizada y no una regresión lineal multivariada clásica.  
 Ridge lo que hace es reducir la varianza de los coeficientes estimados incluyendo una penalización *l2* a la función de pérdida que implica reducir mínimos cuadrados sumado a la diferencia al cuadrado de los coeficientes respecto de 0. Esto último ponderado por un parámetro $\lambda$ a definir. A mayor $\lambda$ la penalización es mayor y los coeficientes tienden a valores cercanos a 0. El procedimiento reduce la varianza de los coeficientes a costa de introducir un sesgo en su estimación, pero que de tener éxito, el tradeoff es tal que las predicciones son más certeras a pesar de no ser insesgado.  
 
@@ -81,7 +92,7 @@ $$S(\beta) = \sum_{i=1}^n{(y_i - \sum_{j=1}^p{X_{ij}\beta_j)^2}}$$
 A pesar de mantener la propiedad de insesgadez, estos estimadores son bastante sensibles a la alta correlación entre variables ya que al existir en planos muy próximos existen mayor cantidad de combinaciones lineales entre ambas variables que dan resultados similares en cuanto al ajuste del modelo. Esto se traduce en que los estimadores de MCO puedan variar mucho entre distintas muestras de la misma población, es decir que son estimadores con varianza elevada. Aunque en promedio los estimadores se centren en los verdaderos valores de $\beta$, lo van a hacer de manera muy errática y los valores que encontremos en nuestra muestra no van a ser confiables y por lo tanto nuestras predicciones tampoco.
 
 En este momento es donde hay que tener en mente el tradeoff entre sesgo y varianza de un modelo. Este concepto nos dice que el error cuadrático medio (MSE por sus siglas en inglés) de un set de testeo puede descomponerse entre sesgo elevado al cuadrado más varianza - del modelo estimado y aplicada a la nueva observación - más la varianza del error irreducible del proceso generador de datos.  
-El último elemento está fijo pero los primeros dos varían según el modelo utilizado y estimado. En general modelos más flexibles tienden a tener menor sesgo ya que pueden ajustarse mejor a las no linealidades de los datos pero a su vez suelen tener más varianza ya que cambios en los datos tienen impacto sobre cómo ajustan entre muestras distintas.
+El último elemento está fijo pero los primeros dos varían según el modelo utilizado y estimado. En general modelos más flexibles tienden a tener menor sesgo ya que pueden ajustarse mejor a las no linealidades de los datos, pero a su vez suelen tener más varianza ya que cambios en los datos tienen impacto sobre cómo ajustan entre muestras distintas.
 Dijimos que MCO sufre de alta varianza en sus estimadores ante presencia de variables correlacionadas y como mencionamos, el dataset de este trabajo presenta tal característica ya que los jugadores de un equipo son pocos y suelen compartir minutos en cancha de manera reiterada. La propuesta de utilizar una regresión Ridge apunta a tratar de resolver la problemática de la alta varianza. La regularización por Ridge agrega una penalización a la minimización del desvío cuadrático respecto a cero y eso genera dos consecuencias:
 
 * Los estimadores dejan de ser insesgados ya que se los restringe al penalizar su alejamiento de 0.
@@ -94,7 +105,7 @@ $$S(\beta) = \sum_{i=1}^n{(y_i - \sum_{j=1}^p{X_{ij}\beta_j)^2}} + \lambda \sum_
 
 Donde $\lambda$ es un hiperparámetro que regula el peso de la penalización en la función de costo. Mayores (menores) valores de $\lambda$ hacen más (menos) costosos los desvíos de los estimadores respecto de cero. En los extremos, si $\lambda = 0$, los estimadores son los mismos que MCO y si $\lambda = +\infty$ todos los estimadores son 0 y queda solo el intercepto. 
 El objetivo de incluir la penalización es agregar un poco de sesgo a cambio de reducir en mayor medida la componente de varianza del MSE mediante la restricción que se aplica sobre los coeficientes estimados. El éxito de este enfoque depende en gran medida del $\lambda$ elegido.
-Para seleccionar el valor de $\lambda$ la práctica habitual es hiperparametrizar el modelo medianto crossvalidation.
+Para seleccionar el valor de $\lambda$ la práctica habitual es hiperparametrizar el modelo mediante crossvalidation.
 
 ### Aplicación
 
@@ -146,6 +157,7 @@ ggplot(data = possessions_in_court_player_bind) +
 
 * Se eliminaron las observaciones con menos de 5 posesiones. Este número corresponde a la mediana de la cantidad de posesiones por observación. Se considera que observaciones con menos de esa cantidad de posesiones no son representativas y aumentan el ruido dentro del modelo. Ver figura \@ref(fig:distposstint)
 
+
 ```{r}
 possessions_per_stint <- bind_rows(matrix_player_list_col)
 #summary(possessions_per_stint$amount_possessions)
@@ -165,13 +177,15 @@ possessions_per_stint <- bind_rows(matrix_player_list_col)
 * Se normalizó la variable dependiente, llevando la métrica a diferencial de puntos cada 100 posesiones para hacer comparables los segmentos de tiempo.  
 
 
+* Luego de estos pasos de preprocesamiento nuestro dataset cuenta con 16775 observaciones y 405 variables independientes.
+
 Una vez preprocesados todos los datos y habiendo definido el modelo, procedemos a la etapa de correr la regresión.
 La librería que vamos a utilizar es *glmnet*[6].  
-Dijimos que uno de los hiperparámetros de la regresión Ridge es $\lambda$ que define el peso de la penalización. Lo primero que hacemos es definir qué valor va a tomar para nuestro problema. La solución propuesta es el calcular el $\lambda$ óptimo mediante Cross Validation con 10 folds. La librería provée la función *cv.glmnet* para tal fin, donde lo que hace es dividir el set de datos en 10 subsets y entrenar un modelo con 9 de los 10 subsets y validarlo con el décimo. Así para cada combinación de subsets. Esto lo realiza reiteradas veces para distintos valores de $\lambda$. Finalmente calcula el error cuadrático medio para cada $\lambda$ en los sets de validación. Entre todos esos resultados buscamos el $\lambda$ cuyo error promedio en validación sea el menor y será el que utilicemos para nuestro modelo con todos los datos.
+Dijimos que uno de los hiperparámetros de la regresión Ridge es $\lambda$ que define el peso de la penalización. Lo primero que hacemos es definir qué valor va a tomar para nuestro problema. La solución propuesta es el calcular el $\lambda$ óptimo mediante Cross Validation con 10 folds. La librería provee la función *cv.glmnet* para tal fin, donde lo que hace es dividir el set de datos en 10 subsets y entrenar un modelo con 9 de los 10 subsets y validarlo con el décimo. Así para cada combinación de subsets. Esto lo realiza reiteradas veces para distintos valores de $\lambda$. Finalmente calcula el error cuadrático medio para cada $\lambda$ en los sets de validación. Entre todos esos resultados buscamos el $\lambda$ cuyo error promedio en validación sea el menor y será el que utilicemos para nuestro modelo con todos los datos.
 
 
 Al aplicar este procedimiento obtenemos el óptimo para nuestro set de datos:
-$\lambda = 1.369778$
+$\lambda = \text{1.369778}$
 
 Tomando este valor de $\lambda$, lo siguiente es correr el modelo Ridge con todo el training set imputando ese valor para el hiperparámetro.
 
@@ -182,7 +196,8 @@ A continuación mostramos los primeros diez jugadores según el coeficiente obte
 
 ```{r}
 
-player_ranking = readRDS("output/tables/player_ranking.rds")
+player_ranking = readRDS("output/tables/player_ranking.rds") %>%
+  rename(nombre = player.firstName, apellido = player.lastName, equipo_abre = team.abbreviation)
 ```
 
 ```{r playerranking}
@@ -192,8 +207,8 @@ knitr::kable(head(player_ranking %>% select(-sd),10), caption ="Primeras 10 juga
 
 Puede discutirse el orden y si falta algún jugador importante de la liga pero no es un primer ranking totalmente descabellado. Son jugadores de primer nivel y varios de ellos son "indiscutidos". Es destacable que en 10 jugadores haya 3 duplas que comparten equipo. Es posible que esté relacionado a cierta correlación en la presencia de estos jugadores en cancha y a su vez se de en equipos que han tenido muchas victorias en la temporada. Covington, Gordon y Livingston son de alguna manera una sorpresa en este ranking. 
 
-Viendo el ranking surge una nueva pregunta. ¿Qué tan precisos son esos coeficientes? ¿ Qué tan estable es ese ranking?  
-La manera de cuantificar esto en una regresión lineal es calcular los desvíos estándar de los coeficientes estimados. Hay un punto muy importante a mencionar respecto a esto. La regresión Ridge es lineal en parámetros pero como dijimos, incluye una penalización y eso lleva a que los coeficientes sean sesgados. Dicho esto, los desvíos estándar que calculemos serán sobre parámetros estimados que no sabemos en principio qué tan lejos están en promedio de los verdaderos parámetros si el modelo especificado fuera el correcto. Es posible un escenario donde gran parte del MSE de nuestra regresión se de por el sesgo y la varianza no contribuya casi nada, dando la impresión de gran precisión en la estimación ignorando el sesgo que introdujimos.[7]
+Viendo el ranking surge una nueva pregunta. ¿Qué tan precisos son esos coeficientes? ¿Qué tan estable es ese ranking?  
+La manera de cuantificar esto en una regresión lineal es calcular los desvíos estándar de los coeficientes estimados. Hay un punto muy importante a mencionar respecto a esto. La regresión Ridge es lineal en parámetros, pero como dijimos, incluye una penalización y eso lleva a que los coeficientes sean sesgados. Dicho esto, los desvíos estándar que calculemos serán sobre parámetros estimados que no sabemos en principio qué tan lejos están en promedio de los verdaderos parámetros si el modelo especificado fuera el correcto. Es posible un escenario donde gran parte del MSE de nuestra regresión se de por el sesgo y la varianza no contribuya casi nada, dando la impresión de gran precisión en la estimación ignorando el sesgo que introdujimos.[7]
 
 Teniendo en cuenta esta limitación a la hora de interpretar los resultados pasamos al cálculo de los desvíos estándar. El paquete *glmnet* no tiene una función que devuelva los desvíos, posiblemente para evitar que se reporten sin recaudos. La manera de calcularlos es, de manera resumida:[8]
 
@@ -206,7 +221,8 @@ Ver tabla \ref{tab:playerrankingsd}
 
 ```{r}
 model = readRDS("data/working/model.rds")
-player_ranking = readRDS("output/tables/player_ranking.rds")
+player_ranking = readRDS("output/tables/player_ranking.rds") %>%
+  rename(nombre = player.firstName, apellido = player.lastName, equipo_abre = team.abbreviation)
 ```
 
 ```{r playerrankingsd}
@@ -221,6 +237,7 @@ Los coeficientes están sesgados pero mantienen la propiedad de ser variables no
 ```{r t_test}
 # Test T a una cola
 # Jugador rankeado 1
+player_ranking = readRDS("output/tables/player_ranking.rds")
 tscore_1 = (player_ranking$coef[1] - 0)/player_ranking$sd[1]
 pvalue_1 = 1 - pt(q = tscore_1, df = model$nobs - model$df)
 # Jugador rankeado 20
@@ -233,7 +250,7 @@ pvalue_20 = 1 - pt(q = tscore_20, df = model$nobs - model$df)
 #glue::glue("El Pvalordel test t del jugador 20 es ", round(pvalue_20,4))
 ```
 
-Realizando el test t para ver diferencias estadísticamente significativas respecto a 0 (Anexo 2) de los coeficientes podemos ver que tanto el jugador rankeado número uno "`r player_ranking$player.lastName[1]`" como el jugador rankeado número veinte "`r player_ranking$player.lastName[20]`" tienen p-valores de `r round(pvalue_1,2)`y `r round(pvalue_20,2)` respectivamente, no encontrando evidencia suficiente para decir que tienen impacto positivo en los puntos de su equipo teniendo un umbral de $\alpha = 0.05$. Más allá de las limitaciones de nuestros estimadores, no poder asegurar estadísticamente que el jugador mejor rankeado aporta positivamente a su equipo parece un obstáculo importante.
+Realizando el test t para ver diferencias estadísticamente significativas respecto a 0 (Anexo 2) de los coeficientes podemos ver que tanto el jugador rankeado número uno "`r player_ranking$player.lastName[1]`" como el jugador rankeado número veinte "`r player_ranking$player.lastName[20]`" tienen p-valores de `r round(pvalue_1,2)` y `r round(pvalue_20,2)` respectivamente, no encontrando evidencia suficiente para decir que tienen impacto positivo en los puntos de su equipo teniendo un umbral de $\alpha$ = 0.05. Más allá de las limitaciones de nuestros estimadores, no poder asegurar estadísticamente que el jugador mejor rankeado aporta positivamente a su equipo parece un obstáculo importante.
 
 ```{r wald_test}
 # Test de Wald para diferencia de coeficientes.
@@ -260,7 +277,7 @@ pvalue_1_405 = 1 - pt(q = wald_1_405_t, df = model$nobs - model$df)
 
 
 Yendo más allá, proponemos un test de Wald para comparar los coeficientes del rankeado número 1 contra el rankeado en la última posición (Anexo 3). La hipótesis nula es que ambos coeficientes son iguales. El test de Wald se basa en que la variable aleatoria generada por la resta de ambos coeficientes sea igual a 0 en la hipótesis nula. Se la divide por su desvío estándar generando un estadístico con distribución T de Student y luego se compara con las regiones críticas. En este caso el p-valor es de `r round(pvalue_1_405,2)`, lo cual nos dice que de ser cierta la hipótesis nula, encontrar un valor al menos tan extremo como este para el estadístico tiene `r round(pvalue_1_405,2)` de probabilidad.
-Nuevamente no podemos rechazar la hipótesis nula con $\alpha = 0.05$ y podemos decir que no hay evidencia estadística para diferenciar al primero del último jugador del ranking por sus coeficientes.  
+Nuevamente no podemos rechazar la hipótesis nula con $\alpha$ = 0.05 y podemos decir que no hay evidencia estadística para diferenciar al primero del último jugador del ranking por sus coeficientes.  
 Al margen de lo ya aclarado de que los desvíos estándar están sesgados, resultados como estos no parecen darle demasiada entidad al modelo. Pareciera que la reducción de la varianza mediante la regresión Ridge, tal como se hizo el experimento, no alcanza para generar coeficientes estables.
 Ver figura \@ref(fig:coefmodelo).
 
@@ -292,7 +309,9 @@ ggplot(data = player_ranking, aes( x = reorder(playerid, coef), y = coef )) +
 ```
 
 
-A pesar de los resultados del test que le quitan importancia a los coeficientes podemos darnos cuenta que aunque sea direccionalmente no es totalmente descabellado (aunque no sirva para obtener conclusiones sólidas). Los jugadores de los primeros puestos del ranking son en gran parte de elite y no sorprende verlos allí. De la misma manera, en la parte baja de la tabla vemos jugadores poco participativos de equipos que obtuvieron buenos resultados en la temporada y principalmente jugadores de equipos que han tenido una campaña pobre (Tabla \ref{tab:rankingbajo} )
+A pesar de los resultados del test que le quitan importancia a los coeficientes podemos darnos cuenta que aunque sea direccionalmente no es totalmente descabellado (aunque no sirva para obtener conclusiones sólidas). Los jugadores de los primeros puestos del ranking son en gran parte de elite y no sorprende verlos allí. De la misma manera, en la parte baja de la tabla vemos jugadores poco participativos de equipos que obtuvieron buenos resultados en la temporada y principalmente jugadores de equipos que han tenido una campaña pobre (Tabla \ref{tab:rankingbajo} )  
+Esta situación donde los resultados parecen coherentes, pero no permiten concluir estadísticamente acerca de ellos, hace pensar que quizás la muestra de un solo año no es suficientemente grande para discernir efectos entre jugadores y recolectar información de mayor cantidad de temporadas es necesario. Por otra parte, la regresión Ridge penaliza la diferencia de los coeficientes respecto a 0, lo cual lleva a acercar todos los coeficientes a ese valor. Puede ser interesante probar si otro enfoque permite diferenciar más a los jugadores, manteniendo el requisito de regularizar. Esto incluiría diferentes valores para los cuales la distancia es penalizada, es decir, no regularizar hacia 0 todos los jugadores sino hacia distintos valores según algún criterio o experiencia en el área. De la misma manera se podría probar algún enfoque bayesiano con distintos priors para los coeficientes que permitan mayor diferenciación entre ellos para compensar en parte la todavía elevada varianza que poseen.
+
 
 ```{r rankingbajo}
 knitr::kable(tail(player_ranking,20), caption = "Ultimos 20 jugadores según coeficiente") %>%
@@ -306,15 +325,16 @@ $$ ValorEquipo_i = \sum_{j=1}^n{Coef_{ji}}*AvgPos_{ji}$$
 Donde j es cada jugador del equipo i.
 
 
-Nuevamente los resultados son bastante creíbles, particularmente en la parte alta de la tabla donde los equipos que más ganaron en la temporada regular figuran en los primeros puestos. En la NBA los mejores 8 equipos de cada conferencia (este y oeste) clasifican a playoffs. De esos 16 equipos, 14 figuran en los primeros 16 puestos del ranking propuesto en este trabajo. Las únicas diferencias es que Denver y Detroit figuran entre los 16 primeros en nuestro ranking y Cleveland y Milwaukee no. Lo curioso es que Denver en realidad tuvo más victorias que Milwaukee pero quedo noveno en su conferencia, es decir que la diferencia entre ambas tablas es muy fina en términos de quienes clasifican a la instancia de eliminiación directa.
+Nuevamente los resultados son bastante creíbles, particularmente en la parte alta de la tabla donde los equipos que más ganaron en la temporada regular figuran en los primeros puestos. En la NBA los mejores 8 equipos de cada conferencia (este y oeste) clasifican a playoffs. De esos 16 equipos, 14 figuran en los primeros 16 puestos del ranking propuesto en este trabajo. Las únicas diferencias es que Denver y Detroit figuran entre los 16 primeros en nuestro ranking y Cleveland y Milwaukee no. Lo curioso es que Denver en realidad tuvo más victorias que Milwaukee pero quedo noveno en su conferencia, es decir que la diferencia entre ambas tablas es muy fina en términos de quienes clasifican a la instancia de eliminación directa.
 Por otra parte, Cleveland que en nuestro ranking queda fuera de los primeros ocho del este, en la realidad salió cuarto de su conferencia, dando lugar a una diferencia significativa entre su ranking y su posición en la tabla.  
 Ver tablas \ref{tab:tailranking} y \ref{tab:standing20172018}.  
-No es menor que el ranking se armó usando los partidos que dieron lugar a los resultados de la temporada regular y por lo tanto es como comparar con el set de entrenamiento, sin embargo lo destacable es que el ranking se arma a partir de la suma de coeficientes de los distintos jugadores y no mirando a los equipos directamente.
+No es menor que el ranking se armó usando los partidos que dieron lugar a los resultados de la temporada regular y por lo tanto es como comparar con el set de entrenamiento, sin embargo, lo destacable es que el ranking se arma a partir de la suma de coeficientes de los distintos jugadores y no mirando a los equipos directamente.
 
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
 team_ranking = readRDS("output/tables/team_ranking.rds") %>%
-  arrange(desc(coef_total))
+  arrange(desc(coef_total)) %>%
+  rename(equipo_abre = team.abbreviation)
 ```
 ```{r tailranking}
 knitr::kable(team_ranking, caption = "Ranking de Equipos agregando coeficientes") %>%
@@ -323,7 +343,7 @@ knitr::kable(team_ranking, caption = "Ranking de Equipos agregando coeficientes"
 
 ```{r standing20172018}
 standing = readRDS("data/raw/standing.rds")
-knitr::kable(standing %>% select(abbreviation, Team, W, L, WL), caption = "Equipos ordenados según cantidad de victorias") %>%
+knitr::kable(standing %>% select( equipo_abre = abbreviation, equipo = Team , G = W,  P = L, G_ratio = WL), caption = "Equipos ordenados según cantidad de victorias") %>%
   kable_styling(latex_options= c("HOLD_position", "striped"))
 ```
 
@@ -332,7 +352,7 @@ knitr::kable(standing %>% select(abbreviation, Team, W, L, WL), caption = "Equip
 
 Lo siguiente que vamos a analizar es cómo performa este ranking construido en la siguiente ronda de la competencia: los playoffs. Los partidos de esa instancia no se usaron para el entrenamiento del modelo.
 
-El enfoque será el más simple posible y consiste en declarar como favorito para cada partido al equipo cuyo score sea mayor en el cruce, teniendo en cuenta los jugadores en el plantel para cada enfrentamiento, contemplando posibles lesiones, sanciones ,etc. Es decir que para cada partido se recalcula el score como la suma ponderada de coeficientes por posesiones promedio de cada jugador y se compara con el score del advsersario.
+El enfoque será el más simple posible y consiste en declarar como favorito para cada partido al equipo cuyo score sea mayor en el cruce, teniendo en cuenta los jugadores en el plantel para cada enfrentamiento, contemplando posibles lesiones, sanciones ,etc. Es decir que para cada partido se recalcula el score como la suma ponderada de coeficientes por posesiones promedio de cada jugador y se compara con el score del adversario.
 $$
 \begin{cases}
 Gana_A &\text{si } ValorEquipo_A \text{ > }  ValorEquipo_B \\
@@ -348,7 +368,8 @@ Dado lo simple del modelo propuesto, donde no se toma en cuenta ningún otro fac
 
 
 ```{r fittable}
-fit_table_export = readRDS(file = "output/tables/fit_table_export.rds")
+fit_table_export = readRDS(file = "output/tables/fit_table_export.rds") %>%
+  rename(equipo1 = team1, equipo2 = team2, ganador = winner, predicho = predicted)
 knitr::kable(fit_table_export, caption = "Predicción del ganador de la serie basado en score") %>%
   kable_styling(latex_options= c("HOLD_position", "striped")) 
 ```
@@ -408,12 +429,12 @@ theme_set(theme_bw())
 ## Conclusiones
 
 El objetivo principal de este trabajo es tratar de dar una medida de la incidencia de un jugador en los puntos de su equipo controlando por sus compañeros y adversarios en cancha para no sobreestimar (subestimar) a quienes se ven beneficiados (perjudicados) por los otros jugadores presentes. Trata de dar un resultado superador al "Plus Minus" clásico que se suele ver en las estadísticas de los partidos de la NBA. La manera propuesta es realizando una regresión Ridge donde los las variables independientes son los jugadores en cancha en cada "stint". Se busca regresar de esta manera para lograr este control mencionado y, dada la alta correlación porque los jugadores no son muchos, se intenta regularizar los coeficientes para evitar resultados poco consistentes.
-Lo primero que se puede observar de los resultados obtenidos es que los jugadores con coeficientes más altos, y por lo tanto con mayor aporte positivo a sus equipos, son en gran medida jugadores de mucho renombre y que no sorprende verlos en los primeros puestos. Por otra parte, con los jugadores de coeficiente más negativo pasa algo similar. No hay ninguno que parezca imposible encontrarlo allí. Sin embargo para los segmentos no tan extremos son más difíciles de distinguir y jugadores que en principio uno esperaría más cerca de la cima se los ve por la mitad de la tabla.
-Evaluando esta situación vimos que los desvíos estándar de los coeficientes son muy altos y estadísticamente no podemos diferenciar entre el jugador con el mayor coeficiente y el de menor coeficiente. A pesar de la reducción en varianza que implica una regresión Ridge comparado con regresión lineal clásica no podemos encontrar coeficientes con estos datos que sean robustos. Parece entonces que direccionalmente el modelo es acertado pero no permite concluir con certeza acerca del orden de los coeficientes.  
-Dicho esto, para ver de manera más agregada que tan creíbles son los coeficientes se procedió a crear un estadístico por equipo siendo este la suma ponderada por posesiones en cancha de los coeficientes de los jugadores de cada equipo. Esto dió lugar a un nuevo ranking, esta vez de equipos, donde nuevamente parece haber lógica. Los equipos mejor rankeados son los que terminaron con mayor cantidad de victorias en la temporada, y 14 de los 16 equipos que clasificaron a playoffs se encuentran en las primeras 16 posiciones. A pesar de la varianza de los coeficientes de los jugadores, la agregación da resultados que no parecen muy errados. 
+Lo primero que se puede observar de los resultados obtenidos es que los jugadores con coeficientes más altos, y por lo tanto con mayor aporte positivo a sus equipos, son en gran medida jugadores de mucho renombre y que no sorprende verlos en los primeros puestos. Por otra parte, con los jugadores de coeficiente más negativo pasa algo similar. No hay ninguno que parezca imposible encontrarlo allí. Sin embargo, para los segmentos no tan extremos son más difíciles de distinguir y jugadores que en principio uno esperaría más cerca de la cima se los ve por la mitad de la tabla.
+Evaluando esta situación vimos que los desvíos estándar de los coeficientes son muy altos y estadísticamente no podemos diferenciar entre el jugador con el mayor coeficiente y el de menor coeficiente. A pesar de la reducción en varianza que implica una regresión Ridge comparado con regresión lineal clásica no podemos encontrar coeficientes con estos datos que sean robustos. Parece entonces que direccionalmente el modelo es acertado, pero no permite concluir con certeza acerca del orden de los coeficientes.  
+Dicho esto, para ver de manera más agregada que tan creíbles son los coeficientes se procedió a crear un estadístico por equipo siendo este la suma ponderada por posesiones en cancha de los coeficientes de los jugadores de cada equipo. Esto dio lugar a un nuevo ranking, esta vez de equipos, donde nuevamente parece haber lógica. Los equipos mejor rankeados son los que terminaron con mayor cantidad de victorias en la temporada, y 14 de los 16 equipos que clasificaron a playoffs se encuentran en las primeras 16 posiciones. A pesar de la varianza de los coeficientes de los jugadores, la agregación da resultados que no parecen muy errados. 
 Dada la aparente buena performance en el ranking a nivel equipos en la temporada regular, que sería el training set, se decidió probar en los cruces de playoff el ranking para ver si servían como predictores de quién ganaría. Se mencionó que partido a partido las alineaciones casi no cambian por lo que los estadísticos se mantienen bastante parejos. Dado que el modelo era muy simple (el mayor score se predice como ganador) se decidió hacerlo a nivel serie, es decir, predecir quién pasa de ronda que equivale a ganar 4 partidos de 7. De los 15 cruces que hay en playoffs se predijeron bien 11 de ellos, lo cual no parece nada mal. De los 4 fallados, 3 corresponden a Cleveland, quién llegó a las finales y consistentemente era predicho como perdedor según el modelo. Cleveland es uno de aquellos equipos que el ranking de equipos clasificaba fuera de los 16 primeros equipos y que finalmente tuvo una gran temporada. El modelo Ridge no logró posicionar correctamente a sus jugadores (quizás consecuencia de la varianza) o quizás el equipo elevó su rendimiento en playoffs.
 
-Claramente el modelo no alcanza a ser robusto como para asegurar que los coeficientes representan el aporte de los jugadores pero aparentemente es suficientemente bueno como para que en promedio los equipos tengan un ranking bastante acorde a su rendimiento durante la temporada y no es descabellado usarlo de parámetro para predecir resultados en playoffs.
+Claramente el modelo no alcanza a ser robusto como para asegurar que los coeficientes representan el aporte de los jugadores, pero aparentemente es suficientemente bueno como para que en promedio los equipos tengan un ranking bastante acorde a su rendimiento durante la temporada y no es descabellado usarlo de parámetro para predecir resultados en playoffs.
 
 ### Próximos pasos
 
@@ -451,7 +472,7 @@ http://www.sloansportsconference.com/wp-content/uploads/2015/09/joeSillSloanSpor
 
 **[3]** MySportsFeeds (2019). API Documentation. Disponible en: https://www.mysportsfeeds.com/data-feeds/api-docs
 
-**[4]** R Core Team (2013). R: A language and environment for statisticalcomputing. R Foundation for Statistical Computing, Vienna, Austria. URL http://www.R-project.org/
+**[4]** R Core Team (2013). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. URL http://www.R-project.org/
 
 **[5]** Hoerl, A. and Kennard, R. (1970) Ridge Regression: Biased Estimation for Nonorthogonal Problems. Technometrics, 12, 55-67.
 https://doi.org/10.1080/00401706.1970.10488634

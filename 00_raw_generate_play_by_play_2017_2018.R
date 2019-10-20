@@ -17,7 +17,8 @@ output <- "play_by_play"
 
 seasonal_games <- readRDS(file = here::here("data","raw","seasonal_games_2017_2018.RDS"))
 games_raw <- seasonal_games$api_json$games
-games <- games_raw %>% select(game_id = schedule.id , game_start_time = schedule.startTime, 
+games <- games_raw %>% select(game_id = schedule.id ,
+                              game_start_time = schedule.startTime, 
                               away_team = schedule.awayTeam.abbreviation,
                               home_team = schedule.homeTeam.abbreviation)
 

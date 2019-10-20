@@ -1,0 +1,4 @@
+Use el programa PDFTK
+D:\Programas\PDFtk\bin
+
+Para adjuntar la caratula y el output del RMD (trabajo especializacion)
